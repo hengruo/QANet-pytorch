@@ -105,3 +105,4 @@ ENV/
 data/
 tmp/
 log/
+model/
