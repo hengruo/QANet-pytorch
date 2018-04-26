@@ -1,8 +1,9 @@
 import argparse
 import models
+import config
 from dataset import get_dataset
 from dataset import SQuAD
-from models import RNet
+from models import QANet
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,14 +14,13 @@ from tqdm import tqdm
 import os
 import random
 import ujson as uj
-import eval
 
 model_fn = "model.pt"
 model_dir = "model/"
 log_dir = "log/"
 checkpoint = 1000
-batch_size = models.batch_size
-device = models.device
+batch_size = config.batch_size
+device = config.device
 cudnn.enabled = False
 
 def parse_args():

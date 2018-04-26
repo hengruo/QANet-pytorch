@@ -5,12 +5,10 @@ import numpy as np
 import ujson as uj
 import spacy
 from collections import defaultdict
-import random
 import copy
 from models import CharEmbedding, word_emb_size, char_emb_size
 import torch
 from tqdm import *
-import utils
 
 '''
 Prepare data
@@ -177,7 +175,7 @@ def parse_data_I(squad: SQuAD):
     print('Generating word\'s char-level embeddings')
     wcemb = [np.zeros(char_emb_size) for _ in specials]
     for i in tqdm(range(4, len(wemb))):
-        chars = torch.FloatTensor([cemb[ctoi[c]] for c in list(squad.itow[str(i)])])
+        chars = torch.FloatTensor([cemb[ctoi[c]] if c in ctoi else cemb[0] for c in list(squad.itow[i])])
         chars = torch.unsqueeze(chars, 1)
         wcemb.append(charemb(chars).data.numpy())
     squad.char_embedding = np.array(wcemb)
@@ -219,14 +217,14 @@ def parse_dataset(jsondata, squad: SQuAD ,dataset: SQuAD.Dataset):
                             ans_span.append(idx)
                     ans_pair = (ans_span[0], ans_span[-1])
                     dataset.answers.append(ans_pair)
-                    dataset.pack.append((pid, qid, aid))
+                    dataset.packs.append((pid, qid, aid))
                     aid += 1
                 dataset.questions.append(ques_token_wids)
                 dataset.question_ids.append(ques_id)
                 qid += 1
             dataset.passages.append(context_token_wids)
             pid += 1
-    dataset.length = len(dataset.pack)
+    dataset.length = len(dataset.packs)
 
 def parse_data_II(squad):
     f = open(os.path.join(data_dir, train_filename), 'r')
@@ -242,7 +240,7 @@ def get_embeddings(inputs, squad, cemb, wemb, wtoi):
     for p in inputs:
         ws = []
         for i, n in enumerate(p):
-            c = squad.itow[str(n)]
+            c = squad.itow[n]
             if c not in wtoi:
                 nn = wtoi[c]
                 wemb.append(squad.word_embedding[n])
@@ -283,6 +281,3 @@ def get_dataset():
         parse_data_III(squad)
         squad.dump("data/")
     return squad
-
-if __name__ == '__main__':
-    _ = get_dataset()
