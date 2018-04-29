@@ -3,13 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
-char_limit = 16
-char_dim = 8
-char_hidden_size = 100
-char_num_layers = 1
-char_direc = 2
-
-dropout = 0.2
+dropout = 0.1
+dropout_w = 0.1
+dropout_c = 0.05
 batch_size = 32
 d_model = 128
 h = 8
@@ -17,8 +13,9 @@ d_k = d_model // h
 d_v = d_model // h
 cq_att_size = d_model * 4
 word_emb_size = 300
-char_emb_size = char_direc * char_num_layers * char_hidden_size
+char_emb_size = 200
 emb_size = word_emb_size + char_emb_size
+training = True
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -56,7 +53,7 @@ class CharEmbedding(nn.Module):
         self.num_layers = 1
         self.bidirectional = True
         self.dir = 2 if self.bidirectional else 1
-        self.hidden_size = char_hidden_size
+        self.hidden_size = 100
         self.in_size = in_size
         self.gru = nn.GRU(input_size=in_size, bidirectional=self.bidirectional, num_layers=self.num_layers,
                           hidden_size=self.hidden_size)
@@ -65,11 +62,9 @@ class CharEmbedding(nn.Module):
 
     def forward(self, input):
         (l, b, in_size) = input.size()
-        assert in_size == self.in_size and b == 1
         o, h = self.gru(input, self.h)
         h = h.view(-1)
         return h
-
 
 class DepthwiseSeparableConv(nn.Module):
     def __init__(self, in_ch, out_ch, k):
@@ -134,14 +129,17 @@ class EncoderBlock(nn.Module):
             out = norm(out)
             out = conv(out)
             out = res + out
+            out = F.dropout(out, p=dropout, training=training)
             res = out
         out = norm(out)
         out = self.self_att(out)
         out = res + out
+        out = F.dropout(out, p=dropout, training=training)
         res = out
         out = norm(out)
         out = torch.bmm(self.W, out)
         out = res + out
+        out = F.dropout(out, p=dropout, training=training)
         return out
 
 
@@ -164,7 +162,9 @@ class CQAttention(nn.Module):
         S__ = F.softmax(S, dim=1)
         A = torch.bmm(Q, S_.transpose(1, 2))
         B = torch.bmm(C, torch.bmm(S_, S__.transpose(1, 2)).transpose(1, 2))
-        return torch.cat([C, A, torch.mul(C, A), torch.mul(C, B)], dim=1)
+        out = torch.cat([C, A, torch.mul(C, A), torch.mul(C, B)], dim=1)
+        out = F.dropout(out, p=dropout, training=training)
+        return out
 
 
 class Pointer(nn.Module):
@@ -184,8 +184,10 @@ class Pointer(nn.Module):
 
 
 class StandardQANet(nn.Module):
-    def __init__(self):
+    def __init__(self, data):
         super().__init__()
+        self.char_emb = nn.Embedding(128, char_emb_size)
+        self.word_emb = nn.Embedding.from_pretrained(torch.Tensor(data.word_embedding))
         self.c_emb_rez = ResizingConv(in_ch=emb_size, out_ch=d_model, k=7)
         self.q_emb_rez = ResizingConv(in_ch=emb_size, out_ch=d_model, k=7)
         self.c_emb_enc = EncoderBlock(conv_num=4, in_ch=d_model, out_ch=d_model, k=7)
@@ -198,7 +200,14 @@ class StandardQANet(nn.Module):
         self.model_enc3 = EncoderBlock(conv_num=2, in_ch=d_model, out_ch=d_model, k=5)
         self.out = Pointer()
 
-    def forward(self, C, Q):
+    def forward(self, Cwid, Ccid, Qwid, Qcid):
+        Cw, Cc = self.word_emb(Cwid), self.char_emb(Ccid)
+        Qw, Qc = self.word_emb(Qwid), self.char_emb(Qcid)
+        Cc, _ = torch.max(Cc, dim=2)
+        Qc, _ = torch.max(Qc, dim=2)
+        Cw, Qw = F.dropout(Cw, dropout_w, training=training), F.dropout(Qw, dropout_w, training=training)
+        Cc, Qc = F.dropout(Cc, dropout_w, training=training), F.dropout(Qc, dropout_w, training=training)
+        C, Q = torch.cat([Cw, Cc], dim=2).transpose(1,2), torch.cat([Qw, Qc], dim=2).transpose(1,2)
         C = self.c_emb_rez(C)
         Q = self.q_emb_rez(Q)
         C = self.c_emb_enc(C)
@@ -208,7 +217,9 @@ class StandardQANet(nn.Module):
         M0 = self.model_enc0(self.model_enc1(self.model_enc1(X)))
         M1 = self.model_enc1(self.model_enc2(self.model_enc2(M0)))
         M2 = self.model_enc2(self.model_enc3(self.model_enc3(M1)))
-        return self.out(M0, M1, M2)
+        p0, p1 = self.out(M0, M1, M2)
+        p0, p1 = torch.exp(p0), torch.exp(p1)
+        return p0, p1
 
 
 

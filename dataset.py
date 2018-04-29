@@ -28,6 +28,10 @@ word_emb_url_base = "http://nlp.stanford.edu/data/"
 char_emb_url_base = "https://raw.githubusercontent.com/minimaxir/char-embeddings/master/"
 train_url_base = "https://rajpurkar.github.io/SQuAD-explorer/dataset/"
 dev_url_base = "https://rajpurkar.github.io/SQuAD-explorer/dataset/"
+
+context_max_L = 500
+
+
 # GloVe embedding
 
 # SQuAD dataset
@@ -43,7 +47,7 @@ class SQuAD:
             pack: [(idx of wpassages, idx of wquestions, idx of answers)]
             '''
             self.length = 0
-            self.passages = []
+            self.contexts = []
             self.questions = []
             self.question_ids = []
             self.answers = []
@@ -56,15 +60,27 @@ class SQuAD:
         self.dev = SQuAD.Dataset()
         self.itow = {}
         self.wtoi = {}
-    
+        self.itoc = {}
+        self.ctoi = {}
+
     @classmethod
     def load(cls, dirname: str):
         squad = SQuAD()
         f = open(os.path.join(dirname, "itow.json"), "r")
-        squad.itow = uj.load(f)
+        itow = uj.load(f)
+        for k in itow:
+            squad.itow[int(k)] = itow[k]
         f.close()
         f = open(os.path.join(dirname, "wtoi.json"), "r")
         squad.wtoi = uj.load(f)
+        f.close()
+        f = open(os.path.join(dirname, "itoc.json"), "r")
+        itoc = uj.load(f)
+        for k in itoc:
+            squad.itoc[int(k)] = itoc[k]
+        f.close()
+        f = open(os.path.join(dirname, "ctoi.json"), "r")
+        squad.ctoi = uj.load(f)
         f.close()
         f = open(os.path.join(dirname, "char_embedding.npy"), "rb")
         squad.char_embedding = np.load(f)
@@ -83,7 +99,7 @@ class SQuAD:
             squad.dev.__setattr__(key, train[key])
         f.close()
         return squad
-    
+
     def dump(self, dirname: str):
         if not os.path.exists(dirname):
             os.mkdir(dirname)
@@ -92,6 +108,12 @@ class SQuAD:
         f.close()
         f = open(os.path.join(dirname, "wtoi.json"), "w")
         uj.dump(self.wtoi, f)
+        f.close()
+        f = open(os.path.join(dirname, "itoc.json"), "w")
+        uj.dump(self.itoc, f)
+        f.close()
+        f = open(os.path.join(dirname, "ctoi.json"), "w")
+        uj.dump(self.ctoi, f)
         f.close()
         f = open(os.path.join(dirname, "char_embedding.npy"), "wb")
         np.save(f, self.char_embedding, allow_pickle=False)
@@ -105,6 +127,7 @@ class SQuAD:
         f = open(os.path.join(dirname, "dev.json"), "w")
         uj.dump(self.dev.__dict__, f)
         f.close()
+
 
 def download(urlbase, filename, path):
     url = os.path.join(urlbase, filename)
@@ -152,7 +175,6 @@ def parse_data_I(squad: SQuAD):
     [wtoi[x] for x in specials]
     cemb = [np.zeros(word_emb_size) for _ in specials]
     wemb = copy.deepcopy(cemb)
-    itoc = {}
     print('Reading char embeddings')
     for line in cembf.readlines():
         tmp = line.split(' ')
@@ -165,21 +187,17 @@ def parse_data_I(squad: SQuAD):
         wemb.append(np.array([float(x) for x in tmp[1:]]))
         if len(wtoi) != len(wemb):
             _ = wemb.pop()
-            
+
     for char in ctoi:
-        itoc[ctoi[char]] = char
+        squad.itoc[ctoi[char]] = char
     for word in wtoi:
         squad.itow[wtoi[word]] = word
     squad.wtoi = dict(wtoi)
-    charemb = CharEmbedding()
-    print('Generating word\'s char-level embeddings')
-    wcemb = [np.zeros(char_emb_size) for _ in specials]
-    for i in tqdm(range(4, len(wemb))):
-        chars = torch.FloatTensor([cemb[ctoi[c]] if c in ctoi else cemb[0] for c in list(squad.itow[i])])
-        chars = torch.unsqueeze(chars, 1)
-        wcemb.append(charemb(chars).data.numpy())
-    squad.char_embedding = np.array(wcemb)
+    squad.ctoi = dict(ctoi)
+    print("Dictionary complete.")
+    squad.char_embedding = np.array(cemb)
     squad.word_embedding = np.array(wemb)
+
 
 def convert_idx(text, tokens):
     current = 0
@@ -193,13 +211,15 @@ def convert_idx(text, tokens):
         current += len(token)
     return spans
 
-def parse_dataset(jsondata, squad: SQuAD ,dataset: SQuAD.Dataset):
+
+def parse_dataset(jsondata, squad: SQuAD, dataset: SQuAD.Dataset):
     tokenizer = spacy.blank('en')
-    pid, qid, aid = 0, 0, 0
+    cid, qid, aid = 0, 0, 0
     for item in jsondata:
         for para in item['paragraphs']:
             context = para['context'].replace("''", '" ').replace("``", '" ')
             context_tokens = [token.text for token in tokenizer(context)]
+            if len(context_tokens) > context_max_L: continue
             context_token_wids = [squad.wtoi[tk] if tk in squad.wtoi else 0 for tk in context_tokens]
             spans = convert_idx(context, context_tokens)
             for qa in para['qas']:
@@ -217,14 +237,15 @@ def parse_dataset(jsondata, squad: SQuAD ,dataset: SQuAD.Dataset):
                             ans_span.append(idx)
                     ans_pair = (ans_span[0], ans_span[-1])
                     dataset.answers.append(ans_pair)
-                    dataset.packs.append((pid, qid, aid))
+                    dataset.packs.append((cid, qid, aid))
                     aid += 1
                 dataset.questions.append(ques_token_wids)
                 dataset.question_ids.append(ques_id)
                 qid += 1
-            dataset.passages.append(context_token_wids)
-            pid += 1
+            dataset.contexts.append(context_token_wids)
+            cid += 1
     dataset.length = len(dataset.packs)
+
 
 def parse_data_II(squad):
     f = open(os.path.join(data_dir, train_filename), 'r')
@@ -232,10 +253,14 @@ def parse_data_II(squad):
     f.close()
     f = open(os.path.join(data_dir, dev_filename), 'r')
     dev = uj.load(f)['data']
+    print("Parsing train dataset.")
     parse_dataset(train, squad, squad.train)
+    print("Parsing dev dataset.")
     parse_dataset(dev, squad, squad.dev)
+    print("Parsing done.")
 
-def get_embeddings(inputs, squad, cemb, wemb, wtoi):
+
+def get_embeddings(inputs, squad, wemb, wtoi):
     ss = []
     for p in inputs:
         ws = []
@@ -244,27 +269,36 @@ def get_embeddings(inputs, squad, cemb, wemb, wtoi):
             if c not in wtoi:
                 nn = wtoi[c]
                 wemb.append(squad.word_embedding[n])
-                cemb.append(squad.char_embedding[n])
                 p[i] = nn
             ws.append(wtoi[c])
         ss.append(ws)
     return ss
 
+
 def parse_data_III(squad):
+    print("Reconstruct embeddings.")
     wtoi = defaultdict(lambda: len(wtoi))
     specials = ['<UNK>', '<PAD>', '<SOS>', '<EOS>']
     [wtoi[x] for x in specials]
-    cemb = [np.zeros(char_emb_size) for _ in specials]
     wemb = [np.zeros(word_emb_size) for _ in specials]
-    squad.train.passages = get_embeddings(squad.train.passages, squad, cemb, wemb, wtoi)
-    squad.dev.passages = get_embeddings(squad.dev.passages, squad, cemb, wemb, wtoi)
-    squad.train.questions = get_embeddings(squad.train.questions, squad, cemb, wemb, wtoi)
-    squad.dev.questions = get_embeddings(squad.dev.questions, squad, cemb, wemb, wtoi)
+    squad.train.contexts = get_embeddings(squad.train.contexts, squad, wemb, wtoi)
+    squad.dev.contexts = get_embeddings(squad.dev.contexts, squad, wemb, wtoi)
+    squad.train.questions = get_embeddings(squad.train.questions, squad, wemb, wtoi)
+    squad.dev.questions = get_embeddings(squad.dev.questions, squad, wemb, wtoi)
     itow = {}
     for word in wtoi:
         itow[wtoi[word]] = word
+    charemb = CharEmbedding()
+    print('Generating word\'s char-level embeddings')
+    wcemb = [np.zeros(char_emb_size) for _ in specials]
+    for i in tqdm(range(4, len(wemb))):
+        chars = torch.FloatTensor(
+            [squad.char_embedding[squad.ctoi[c]] if c in squad.ctoi else squad.char_embedding[0] for c in
+             list(squad.itow[i])])
+        chars = torch.unsqueeze(chars, 1)
+        wcemb.append(charemb(chars).data.numpy())
     squad.word_embedding = np.array(wemb)
-    squad.char_embedding = np.array(cemb)
+    squad.char_embedding = np.array(wcemb)
     squad.itow = dict(itow)
     squad.wtoi = dict(wtoi)
 
@@ -281,3 +315,13 @@ def get_dataset():
         parse_data_III(squad)
         squad.dump("data/")
     return squad
+
+
+if __name__ == "__main__":
+    # squad = SQuAD()
+    # parse_data_I(squad)
+    # parse_data_II(squad)
+    # squad.dump("data/")
+    squad = SQuAD.load("data/")
+    parse_data_III(squad)
+    squad.dump("data/")
