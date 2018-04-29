@@ -29,7 +29,7 @@ char_emb_url_base = "https://raw.githubusercontent.com/minimaxir/char-embeddings
 train_url_base = "https://rajpurkar.github.io/SQuAD-explorer/dataset/"
 dev_url_base = "https://rajpurkar.github.io/SQuAD-explorer/dataset/"
 
-context_max_L = 500
+context_max_L = 350
 
 
 # GloVe embedding
@@ -318,10 +318,9 @@ def get_dataset():
 
 
 if __name__ == "__main__":
-    # squad = SQuAD()
-    # parse_data_I(squad)
-    # parse_data_II(squad)
-    # squad.dump("data/")
-    squad = SQuAD.load("data/")
+    squad = SQuAD()
+    parse_data_I(squad)
+    parse_data_II(squad)
+    squad.dump("data/")
     parse_data_III(squad)
     squad.dump("data/")
