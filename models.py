@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import config
 
 char_limit = 16
 char_dim = 8
@@ -11,7 +10,10 @@ char_direc = 2
 
 dropout = 0.2
 batch_size = 32
-hidden_size = 128
+d_model = 128
+h = 8
+d_k = d_model // h
+d_v = d_model // h
 word_emb_size = 300
 char_emb_size = char_direc * char_num_layers * char_hidden_size
 emb_size = word_emb_size + char_emb_size
