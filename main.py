@@ -152,14 +152,12 @@ def test(model, data):
     l = len(packs)
     anss = {}
     print("Testing...")
-    print("Dataset size: "+str(l))
     for i in range(l):
         pack = packs[i]
         Cw, Cc, Qw, Qc, a = to_batch(pack, data, data.dev)
         out1, out2 = model(Cw, Cc, Qw, Qc)
         _, idx1 = torch.max(out1, dim=1)
         _, idx2 = torch.max(out2, dim=1)
-        torch.cuda.empty_cache()
         na = torch.cat([idx1.unsqueeze(1), idx2.unsqueeze(1)], dim=1)
         for j in range(batch_size):
             ans = get_anwser(na[j, 0], na[j, 1], pack[j][0], data.itow, data.dev)
