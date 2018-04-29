@@ -24,12 +24,11 @@ phases = {}
 
 def get_freq(d: int):
     return torch.Tensor(
-        [10000 ** (-i / d) if i % 2 == 0 else -10000 ** (-(i - 1) / d) for i in range(d)],
-        device=device).unsqueeze(dim=1)
+        [10000 ** (-i / d) if i % 2 == 0 else -10000 ** (-(i - 1) / d) for i in range(d)]).unsqueeze(dim=1).to(device)
 
 
 def get_phase(d: int):
-    return torch.Tensor([0 if i % 2 == 0 else math.pi / 2 for i in range(d)], device=device).unsqueeze(dim=1)
+    return torch.Tensor([0 if i % 2 == 0 else math.pi / 2 for i in range(d)]).unsqueeze(dim=1).to(device)
 
 def norm(x, eps=1e-6):
     mean = x.mean(-1, keepdim=True)
@@ -38,7 +37,7 @@ def norm(x, eps=1e-6):
 
 def pos_encoding(x):
     (_, d, l) = x.size()
-    pos = torch.arange(l).repeat(d, 1)
+    pos = torch.arange(l).repeat(d, 1).to(device)
     tmp1 = torch.mul(pos, freqs[d])
     tmp2 = torch.add(tmp1, phases[d])
     pos_enc = torch.sin(tmp2)

@@ -67,10 +67,10 @@ def to_batch(pack, data: SQuAD, dataset):
             Qc[i][j][0:len(cs)] = cs
         a[i, 0] = As[i][0]
         a[i, 1] = As[i][1]
-    Cw = torch.LongTensor(Cw, device=device)
-    Cc = torch.LongTensor(Cc, device=device)
-    Qw = torch.LongTensor(Qw, device=device)
-    Qc = torch.LongTensor(Qc, device=device)
+    Cw = torch.LongTensor(Cw).to(device)
+    Cc = torch.LongTensor(Cc).to(device)
+    Qw = torch.LongTensor(Qw).to(device)
+    Qc = torch.LongTensor(Qc).to(device)
     return Cw, Cc, Qw, Qc, a
 
 
@@ -128,6 +128,7 @@ def train(epoch, data):
 def get_anwser(i, j, pid, itow, dataset):
     p = dataset.contexts[pid]
     i, j = min(i, j), max(i, j)
+    if j >= len(p): return ""
     ans_ = []
     for t in range(j - i + 1):
         ans_.append(p[i + t])
@@ -144,6 +145,7 @@ def test(model, data):
     for i in tqdm(range(l)):
         pack = packs[i]
         Cw, Cc, Qw, Qc, a = to_batch(pack, data, data.dev)
+        print(Cw.size())
         out1, out2 = model(Cw, Cc, Qw, Qc)
         _, idx1 = torch.max(out1, dim=1)
         _, idx2 = torch.max(out2, dim=1)
