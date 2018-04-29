@@ -111,10 +111,10 @@ def train(epoch, data):
                 scheduler.step()
                 if (i+1) % checkpoint == 0:
                     torch.save(model, os.path.join(model_dir, "model-tmp-{:02d}-{}.pt".format(ep, i + 1)))
-                    em, f1 = test(model, data)
-                    llog = "EPOCH: {:02d}\tITER: {:05d}\tEM: {:6.40f}\tF1: {:6.40f}\n".format(ep+1, i+1, em, f1)
-                    f_log.write(llog)
-                    f_log.flush()
+            em, f1 = test(model, data)
+            llog = "EPOCH: {:02d}\tEM: {:6.40f}\tF1: {:6.40f}\n".format(ep + 1, i + 1, em, f1)
+            f_log.write(llog)
+            f_log.flush()
             random.shuffle(packs)
         torch.save(model, os.path.join(model_dir, model_fn))
     except Exception as e:
@@ -152,7 +152,7 @@ def test(model, data):
     l = len(packs)
     anss = {}
     print("Testing...")
-    for i in range(l):
+    for i in tqdm(range(l)):
         pack = packs[i]
         Cw, Cc, Qw, Qc, a = to_batch(pack, data, data.dev)
         out1, out2 = model(Cw, Cc, Qw, Qc)
