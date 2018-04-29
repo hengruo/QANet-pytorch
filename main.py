@@ -2,7 +2,7 @@ import argparse
 import models
 from dataset import get_dataset
 from dataset import SQuAD
-from models import StandardQANet
+from models import QANet
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
@@ -87,7 +87,7 @@ def trunk(packs, batch_size):
 
 
 def train(epoch, data):
-    model = StandardQANet(data).to(device)
+    model = QANet(data).to(device)
     parameters = filter(lambda param: param.requires_grad, model.parameters())
     optimizer = optim.Adam(betas=(0.8, 0.999), eps=1e-7, weight_decay=3e-7, params=parameters)
     crit = 0.001 / math.log2(1000)

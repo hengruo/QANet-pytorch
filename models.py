@@ -182,7 +182,7 @@ class Pointer(nn.Module):
         return p0, p1
 
 
-class StandardQANet(nn.Module):
+class QANet(nn.Module):
     def __init__(self, data):
         super().__init__()
         self.char_emb = nn.Embedding(128, char_emb_size)
@@ -223,7 +223,7 @@ class StandardQANet(nn.Module):
 
 
 if __name__ == "__main__":
-    model = StandardQANet()
+    model = QANet()
     C = torch.randn(batch_size, emb_size, 200)
     Q = torch.randn(batch_size, emb_size, 20)
     p0, p1 = model(C, Q)
