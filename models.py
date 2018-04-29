@@ -6,7 +6,7 @@ import math
 dropout = 0.1
 dropout_w = 0.1
 dropout_c = 0.05
-batch_size = 32
+batch_size = 24
 d_model = 128
 h = 8
 d_k = d_model // h

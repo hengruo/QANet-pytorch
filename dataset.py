@@ -96,7 +96,7 @@ class SQuAD:
         f = open(os.path.join(dirname, "dev.json"), "r")
         dev = uj.load(f)
         for key in dev:
-            squad.dev.__setattr__(key, train[key])
+            squad.dev.__setattr__(key, dev[key])
         f.close()
         return squad
 

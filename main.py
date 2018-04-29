@@ -21,7 +21,7 @@ log_dir = "log/"
 checkpoint = 1000
 batch_size = models.batch_size
 device = models.device
-cudnn.enabled = False
+cudnn.enabled = True
 
 
 def parse_args():
@@ -109,7 +109,7 @@ def train(epoch, data):
                 loss = (loss1 + loss2) / 2
                 loss.backward()
                 scheduler.step()
-                if (i) % checkpoint == 0:
+                if (i+1) % checkpoint == 0:
                     torch.save(model, os.path.join(model_dir, "model-tmp-{:02d}-{}.pt".format(ep, i + 1)))
                     em, f1 = test(model, data)
                     llog = "EPOCH: {:02d}\tITER: {:05d}\tEM: {:6.40f}\tF1: {:6.40f}\n".format(ep+1, i+1, em, f1)
@@ -137,15 +137,24 @@ def get_anwser(i, j, pid, itow, dataset):
         ans += itow[a] + ' '
     return ans[:-1]
 
+def evaluate_from_file(dataset_file, prediction_file):
+    with open(dataset_file) as dataset_file:
+        dataset_json = uj.load(dataset_file)
+        dataset = dataset_json['data']
+    with open(prediction_file) as prediction_file:
+        predictions = uj.load(prediction_file)
+    res = evaluation.evaluate(dataset, predictions)
+    return res['exact_match'], res['f1']
+
 
 def test(model, data):
-    l = data.dev.length
     packs = trunk(data.dev.packs, batch_size)
+    l = len(packs)
     anss = {}
-    for i in tqdm(range(l)):
+    print("Testing...")
+    for i in range(l):
         pack = packs[i]
         Cw, Cc, Qw, Qc, a = to_batch(pack, data, data.dev)
-        print(Cw.size())
         out1, out2 = model(Cw, Cc, Qw, Qc)
         _, idx1 = torch.max(out1, dim=1)
         _, idx2 = torch.max(out2, dim=1)
@@ -154,8 +163,9 @@ def test(model, data):
             ans = get_anwser(na[j, 0], na[j, 1], pack[j][0], data.itow, data.dev)
             anss[data.dev.question_ids[pack[j][1]]] = ans
     with open('log/answer.json', 'w') as f:
-        uj.dump(ans, f)
-        em, f1 = evaluation.evaluate_from_file('tmp/dev-v1.1.json', 'log/answer.json')
+        uj.dump(anss, f)
+        f.close()
+        em, f1 = evaluate_from_file('tmp/squad/dev-v1.1.json', 'log/answer.json')
         print("EM: {}, F1: {}".format(em, f1))
     return em, f1
 
