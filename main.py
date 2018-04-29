@@ -152,10 +152,10 @@ def test(model, data):
     l = len(packs)
     anss = {}
     print("Testing...")
+    print("Dataset size: "+str(l))
     for i in range(l):
         pack = packs[i]
         Cw, Cc, Qw, Qc, a = to_batch(pack, data, data.dev)
-        print(Cw.size())
         out1, out2 = model(Cw, Cc, Qw, Qc)
         _, idx1 = torch.max(out1, dim=1)
         _, idx2 = torch.max(out2, dim=1)
@@ -167,7 +167,7 @@ def test(model, data):
     with open('log/answer.json', 'w') as f:
         uj.dump(anss, f)
         f.close()
-        em, f1 = evaluate_from_file('tmp/dev-v1.1.json', 'log/answer.json')
+        em, f1 = evaluate_from_file('tmp/squad/dev-v1.1.json', 'log/answer.json')
         print("EM: {}, F1: {}".format(em, f1))
     return em, f1
 
@@ -192,5 +192,4 @@ def main():
 
 
 if __name__ == '__main__':
-    em, f1 = evaluate_from_file('tmp/squad/dev-v1.1.json', 'log/answer.json')
-    print("EM: {}, F1: {}".format(em, f1))
+    main()

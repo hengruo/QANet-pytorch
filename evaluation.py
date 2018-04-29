@@ -53,6 +53,7 @@ def metric_max_over_ground_truths(metric_fn, prediction, ground_truths):
 
 def evaluate(dataset, predictions):
     f1 = exact_match = total = 0
+    ferr = open("log/error.log", "w")
     for article in dataset:
         for paragraph in article['paragraphs']:
             for qa in paragraph['qas']:
@@ -60,7 +61,7 @@ def evaluate(dataset, predictions):
                 if qa['id'] not in predictions:
                     message = 'Unanswered question ' + qa['id'] + \
                               ' will receive score 0.'
-                    print(message, file=sys.stderr)
+                    print(message, file=ferr)
                     continue
                 ground_truths = list(map(lambda x: x['text'], qa['answers']))
                 prediction = predictions[qa['id']]
