@@ -88,6 +88,7 @@ def trunk(packs, batch_size):
 
 def train(epoch, data):
     model = QANet(data).to(device)
+    model = torch.load(open("model/model-tmp-02-2000.pt", "rb"))
     parameters = filter(lambda param: param.requires_grad, model.parameters())
     optimizer = optim.Adam(betas=(0.8, 0.999), eps=1e-7, weight_decay=3e-7, params=parameters)
     crit = 0.001 / math.log2(1000)
