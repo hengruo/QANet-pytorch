@@ -164,12 +164,13 @@ class EncoderBlock(nn.Module):
     def forward(self, x):
         out = pos_encoding(x)
         res = out
-        for conv in self.convs:
+        for i, conv in enumerate(self.convs):
             out = norm(out)
             out = conv(out)
             out = self.relu(out)
             out = res + out
-            out = F.dropout(out, p=dropout, training=training)
+            if (i + 1) % 2 == 0:
+                out = F.dropout(out, p=dropout, training=training)
             res = out
         out = norm(out)
         out = self.self_att(out)
@@ -235,10 +236,12 @@ class QANet(nn.Module):
         self.q_emb_enc = EncoderBlock(conv_num=4, ch_num=d_model, k=7)
         self.cq_att = CQAttention()
         self.cq_resizer = DepthwiseSeparableConv(d_model * 4, d_model, 5)
-        self.model_enc0 = EncoderBlock(conv_num=2, ch_num=d_model, k=5)
-        self.model_enc1 = EncoderBlock(conv_num=2, ch_num=d_model, k=5)
-        self.model_enc2 = EncoderBlock(conv_num=2, ch_num=d_model, k=5)
-        self.model_enc3 = EncoderBlock(conv_num=2, ch_num=d_model, k=5)
+        self.enc_num = 3
+        self.model_enc_blks = nn.ModuleList(
+            [EncoderBlock(conv_num=2, ch_num=d_model, k=5),
+             EncoderBlock(conv_num=2, ch_num=d_model, k=5),
+             EncoderBlock(conv_num=2, ch_num=d_model, k=5)])
+        self.model_encs = nn.ModuleList([nn.Sequential([blk]*7) for blk in self.model_enc_blks])
         self.out = Pointer()
 
     def forward(self, Cwid, Ccid, Qwid, Qcid):
@@ -249,9 +252,9 @@ class QANet(nn.Module):
         Q = self.q_emb_enc(Q)
         X = self.cq_att(C, Q)
         X = self.cq_resizer(X)
-        M0 = self.model_enc0(self.model_enc1(self.model_enc1(X)))
-        M1 = self.model_enc1(self.model_enc2(self.model_enc2(M0)))
-        M2 = self.model_enc2(self.model_enc3(self.model_enc3(M1)))
+        M0 = self.model_encs[0](X)
+        M1 = self.model_encs[1](M0)
+        M2 = self.model_encs[2](M1)
         p0, p1 = self.out(M0, M1, M2)
         p0, p1 = torch.exp(p0), torch.exp(p1)
         return p0, p1
@@ -259,9 +262,11 @@ class QANet(nn.Module):
 
 if __name__ == "__main__":
     import dataset
+
     squad = dataset.SQuAD.load("data/")
     model = QANet(squad)
     import random
+
     wl = list(range(1200))
     cl = list(range(50))
     Cw = torch.LongTensor(random.sample(wl, 150)).repeat(batch_size, 1)
