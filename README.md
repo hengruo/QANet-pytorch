@@ -2,7 +2,7 @@
 
 # Introduction
 
-An implementation of
+An implementation of [QANet](https://arxiv.org/pdf/1804.09541.pdf) with PyTorch.
 
 ## Usage
 
@@ -24,4 +24,4 @@ models.py: QANet structure.
 
 1. The paper doesn't mention which activation function they used. I use relu.
 2. I don't set the embedding of `<UNK>` trainable.
-3.
+3. The connector between embedding layers and embedding encoders may be different from the implementation of Google, since the description in the paper is inconsistent (residual block can't be used because the dimensions of input and output are different) and they don't say how they implement it.
