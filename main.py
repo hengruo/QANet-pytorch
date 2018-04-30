@@ -22,6 +22,7 @@ checkpoint = 1000
 batch_size = models.batch_size
 device = models.device
 cudnn.enabled = True
+max_char_num = models.max_char_num
 
 
 def parse_args():
@@ -58,12 +59,12 @@ def to_batch(pack, data: SQuAD, dataset):
         for j in range(max_cl):
             wid = Cw[i][j]
             if wid == 0: continue
-            cs = [data.ctoi[c] if c in data.ctoi else 0 for c in list(data.itow[wid][:16])]
+            cs = [data.ctoi[c] if c in data.ctoi else 0 for c in list(data.itow[wid][:max_char_num])]
             Cc[i][j][0:len(cs)] = cs
         for j in range(max_ql):
             wid = Qw[i][j]
             if wid == 0: continue
-            cs = [data.ctoi[c] if c in data.ctoi else 0 for c in list(data.itow[wid][:16])]
+            cs = [data.ctoi[c] if c in data.ctoi else 0 for c in list(data.itow[wid][:max_char_num])]
             Qc[i][j][0:len(cs)] = cs
         a[i, 0] = As[i][0]
         a[i, 1] = As[i][1]
