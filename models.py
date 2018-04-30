@@ -120,6 +120,7 @@ class EncoderBlock(nn.Module):
         self.convs = nn.ModuleList([DepthwiseSeparableConv(out_ch, out_ch, k) for _ in range(conv_num)])
         self.self_att = SelfAttention()
         self.W = torch.randn(batch_size, out_ch, out_ch, device=device, requires_grad=True)
+        self.relu = nn.ReLU()
 
     def forward(self, x):
         out = pos_encoding(x)
@@ -127,6 +128,7 @@ class EncoderBlock(nn.Module):
         for conv in self.convs:
             out = norm(out)
             out = conv(out)
+            out = self.relu(out)
             out = res + out
             out = F.dropout(out, p=dropout, training=training)
             res = out
@@ -137,6 +139,7 @@ class EncoderBlock(nn.Module):
         res = out
         out = norm(out)
         out = torch.bmm(self.W, out)
+        out = self.relu(out)
         out = res + out
         out = F.dropout(out, p=dropout, training=training)
         return out

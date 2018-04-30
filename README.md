@@ -1,5 +1,9 @@
 # QANet-pytorch
 
+# Introduction
+
+An implementation of
+
 ## Usage
 
 Python 3.6 & PyTorch 0.4
@@ -16,6 +20,8 @@ main.py: program entry.
 
 models.py: QANet structure.
 
-## Checkpoints
-**20180426**
-To implement standard QANet.
+## Differences from the paper
+
+1. The paper doesn't mention which activation function they used. I use relu.
+2. I don't set the embedding of `<UNK>` trainable.
+3.
