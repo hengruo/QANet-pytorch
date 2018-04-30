@@ -241,7 +241,7 @@ class QANet(nn.Module):
             [EncoderBlock(conv_num=2, ch_num=d_model, k=5),
              EncoderBlock(conv_num=2, ch_num=d_model, k=5),
              EncoderBlock(conv_num=2, ch_num=d_model, k=5)])
-        self.model_encs = nn.ModuleList([nn.Sequential([blk]*7) for blk in self.model_enc_blks])
+        self.model_encs = nn.ModuleList([nn.Sequential(*([blk]*7)) for blk in self.model_enc_blks])
         self.out = Pointer()
 
     def forward(self, Cwid, Ccid, Qwid, Qcid):
