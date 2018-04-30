@@ -57,12 +57,12 @@ def evaluate(dataset, predictions):
     for article in dataset:
         for paragraph in article['paragraphs']:
             for qa in paragraph['qas']:
-                total += 1
                 if qa['id'] not in predictions:
                     message = 'Unanswered question ' + qa['id'] + \
                               ' will receive score 0.'
                     print(message, file=ferr)
                     continue
+                total += 1
                 ground_truths = list(map(lambda x: x['text'], qa['answers']))
                 prediction = predictions[qa['id']]
                 exact_match += metric_max_over_ground_truths(
@@ -73,7 +73,7 @@ def evaluate(dataset, predictions):
     exact_match = 100.0 * exact_match / total
     f1 = 100.0 * f1 / total
 
-    return {'exact_match': exact_match, 'f1': f1}
+    return {'exact_match': exact_match, 'f1': f1, "total": total}
 
 
 if __name__ == '__main__':
