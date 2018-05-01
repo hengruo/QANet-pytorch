@@ -14,6 +14,7 @@ import random
 import math
 import ujson as uj
 import evaluation
+from tensorboardX import SummaryWriter
 
 model_fn = "model.pt"
 model_dir = "model/"
@@ -23,7 +24,7 @@ batch_size = models.batch_size
 device = models.device
 cudnn.enabled = True
 max_char_num = models.max_char_num
-
+writer = SummaryWriter(".log")
 
 def parse_args():
     args = argparse.ArgumentParser(description="An R-net implementation.")
@@ -108,9 +109,10 @@ def train(epoch, data, model=None):
                 Cw, Cc, Qw, Qc, a = to_batch(pack, data, data.train)
                 optimizer.zero_grad()
                 out1, out2 = model(Cw, Cc, Qw, Qc)
-                loss1 = F.cross_entropy(out1, a[:, 0])
-                loss2 = F.cross_entropy(out2, a[:, 1])
-                loss = (loss1 + loss2) / 2
+                loss1 = F.cross_entropy(out1, a[:, 0], size_average=False)
+                loss2 = F.cross_entropy(out2, a[:, 1], size_average=False)
+                loss = (loss1 + loss2) / batch_size
+                writer.add_scalar("data/loss", float(loss), ep*l+i)
                 loss.backward()
                 scheduler.step()
                 if (i+1) % checkpoint == 0:
@@ -119,6 +121,7 @@ def train(epoch, data, model=None):
             test(model, data, ep, i, 1, -1, f_log)
             random.shuffle(packs)
         torch.save(model, os.path.join(model_dir, model_fn))
+        writer.close()
     except Exception as e:
         torch.save(model, os.path.join(model_dir, "model-{:02d}-{}.pt".format(ep, i + 1)))
         raise e
