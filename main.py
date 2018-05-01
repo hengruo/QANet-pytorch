@@ -96,7 +96,7 @@ def train(epoch, data):
         ee + 1) if ee + 1 <= 1000 else 0.001)
     packs = trunk(data.train.packs, batch_size)
     f_log = open("log/model.log", "w")
-    test(model, data, 0, 0, 10, 100, f_log)
+    test(model, data, 0, 0, 10, 50, f_log)
     try:
         for ep in range(epoch):
             print("EPOCH {:02d}: ".format(ep))
@@ -113,7 +113,7 @@ def train(epoch, data):
                 scheduler.step()
                 if (i+1) % checkpoint == 0:
                     torch.save(model, os.path.join(model_dir, "model-tmp-{:02d}-{}.pt".format(ep, i + 1)))
-                    test(model, data, ep, i, 10, 100, f_log)
+                    test(model, data, ep, i, 10, 50, f_log)
             test(model, data, ep, i, 1, -1, f_log)
             random.shuffle(packs)
         torch.save(model, os.path.join(model_dir, model_fn))
@@ -153,10 +153,11 @@ def test(model, data, ep, iter, test_num, test_size, f_log):
     anss = {}
     em_sum = 0
     f1_sum = 0
+    tt = 0
     print("Testing...")
     for n in range(test_num):
         if test_size > 0:
-            packs = random.sample(full_packs, test_size)
+            packs = full_packs[:test_size]
             l = test_size
         else:
             packs = full_packs
@@ -164,6 +165,7 @@ def test(model, data, ep, iter, test_num, test_size, f_log):
             pack = packs[i]
             Cw, Cc, Qw, Qc, a = to_batch(pack, data, data.dev)
             out1, out2 = model(Cw, Cc, Qw, Qc)
+            torch.cuda.empty_cache()
             _, idx1 = torch.max(out1, dim=1)
             _, idx2 = torch.max(out2, dim=1)
             na = torch.cat([idx1.unsqueeze(1), idx2.unsqueeze(1)], dim=1)
@@ -176,6 +178,7 @@ def test(model, data, ep, iter, test_num, test_size, f_log):
             em, f1, tt = evaluate_from_file('tmp/squad/dev-v1.1.json', 'log/answer.json')
             em_sum += em
             f1_sum += f1
+        random.shuffle(full_packs)
     em = em_sum/test_num
     f1 = f1_sum/test_num
     print("EM: {}, F1: {}, Total #: ".format(em, f1, tt))
