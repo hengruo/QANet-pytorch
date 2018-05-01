@@ -29,7 +29,7 @@ char_emb_url_base = "https://raw.githubusercontent.com/minimaxir/char-embeddings
 train_url_base = "https://rajpurkar.github.io/SQuAD-explorer/dataset/"
 dev_url_base = "https://rajpurkar.github.io/SQuAD-explorer/dataset/"
 
-context_max_L = 350
+context_max_L = 300
 
 
 # GloVe embedding
