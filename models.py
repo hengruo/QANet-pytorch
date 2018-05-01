@@ -103,10 +103,15 @@ class Highway(nn.Module):
 class SelfAttention(nn.Module):
     def __init__(self):
         super().__init__()
-        self.Wqs = [torch.randn(batch_size, d_k, d_model, device=device, requires_grad=True) for _ in range(h)]
-        self.Wks = [torch.randn(batch_size, d_k, d_model, device=device, requires_grad=True) for _ in range(h)]
-        self.Wvs = [torch.randn(batch_size, d_v, d_model, device=device, requires_grad=True) for _ in range(h)]
-        self.Wo = torch.randn(batch_size, d_v * h, d_model, device=device, requires_grad=True)
+        self.Wqs = [torch.empty(batch_size, d_k, d_model, device=device, requires_grad=True) for _ in range(h)]
+        self.Wks = [torch.empty(batch_size, d_k, d_model, device=device, requires_grad=True) for _ in range(h)]
+        self.Wvs = [torch.empty(batch_size, d_v, d_model, device=device, requires_grad=True) for _ in range(h)]
+        self.Wo = torch.empty(batch_size, d_v * h, d_model, device=device, requires_grad=True)
+        nn.init.xavier_normal_(self.Wo)
+        for i in range(h):
+            nn.init.xavier_normal_(self.Wqs[i])
+            nn.init.xavier_normal_(self.Wks[i])
+            nn.init.xavier_normal_(self.Wvs[i])
 
     def forward(self, x: torch.Tensor):
         assert x.size()[1] == d_model
@@ -159,7 +164,8 @@ class EncoderBlock(nn.Module):
         super().__init__()
         self.convs = nn.ModuleList([DepthwiseSeparableConv(ch_num, ch_num, k) for _ in range(conv_num)])
         self.self_att = SelfAttention()
-        self.W = torch.randn(batch_size, ch_num, ch_num, device=device, requires_grad=True)
+        self.W = torch.empty(batch_size, ch_num, ch_num, device=device, requires_grad=True)
+        nn.init.xavier_normal_(self.W)
         self.relu = nn.ReLU()
 
     def forward(self, x):
@@ -189,7 +195,8 @@ class EncoderBlock(nn.Module):
 class CQAttention(nn.Module):
     def __init__(self):
         super().__init__()
-        self.W = torch.randn(batch_size, 1, d_model * 3, device=device, requires_grad=True)
+        self.W = torch.empty(batch_size, 1, d_model * 3, device=device, requires_grad=True)
+        nn.init.xavier_normal_(self.W)
 
     def forward(self, C, Q):
         (_, _, n) = C.size()
@@ -213,8 +220,10 @@ class CQAttention(nn.Module):
 class Pointer(nn.Module):
     def __init__(self):
         super().__init__()
-        self.W0 = torch.randn(batch_size, 1, d_model * 2, device=device, requires_grad=True)
-        self.W1 = torch.randn(batch_size, 1, d_model * 2, device=device, requires_grad=True)
+        self.W0 = torch.empty(batch_size, 1, d_model * 2, device=device, requires_grad=True)
+        self.W1 = torch.empty(batch_size, 1, d_model * 2, device=device, requires_grad=True)
+        nn.init.xavier_normal_(self.W0)
+        nn.init.xavier_normal_(self.W1)
 
     def forward(self, M0, M1, M2):
         X0 = torch.cat([M0, M1], dim=1)
