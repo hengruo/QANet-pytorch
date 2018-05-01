@@ -6,8 +6,8 @@ import math
 dropout = 0.1
 dropout_w = 0.1
 dropout_c = 0.05
-batch_size = 16
-d_model = 96
+batch_size = 24
+d_model = 64
 h = 8
 d_k = d_model // h
 d_v = d_model // h
@@ -19,6 +19,7 @@ training = True
 max_char_num = 16
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+cpu = torch.device("cpu")
 
 freqs = torch.Tensor(
     [10000 ** (-i / d_model) if i % 2 == 0 else -10000 ** (-(i - 1) / d_model) for i in range(d_model)]).unsqueeze(
@@ -236,11 +237,9 @@ class QANet(nn.Module):
         self.cq_att = CQAttention()
         self.cq_resizer = DepthwiseSeparableConv(d_model * 4, d_model, 5)
         self.enc_num = 3
-        self.model_enc_blks = nn.ModuleList(
-            [EncoderBlock(conv_num=2, ch_num=d_model, k=5),
-             EncoderBlock(conv_num=2, ch_num=d_model, k=5),
-             EncoderBlock(conv_num=2, ch_num=d_model, k=5)])
-        self.model_encs = nn.ModuleList([nn.Sequential(*([blk]*7)) for blk in self.model_enc_blks])
+        self.model_enc_blk0 = EncoderBlock(conv_num=2, ch_num=d_model, k=5)
+        self.model_enc_blk1 = EncoderBlock(conv_num=2, ch_num=d_model, k=5)
+        self.model_enc_blk2 = EncoderBlock(conv_num=2, ch_num=d_model, k=5)
         self.out = Pointer()
 
     def forward(self, Cwid, Ccid, Qwid, Qcid):
@@ -251,10 +250,16 @@ class QANet(nn.Module):
         Q = self.q_emb_enc(Q)
         X = self.cq_att(C, Q)
         X = self.cq_resizer(X)
-        M0 = self.model_encs[0](X)
-        M1 = self.model_encs[1](M0)
-        M2 = self.model_encs[2](M1)
-        p0, p1 = self.out(M0, M1, M2)
+        M0 = X
+        for i in range(7):
+            M0 = self.model_enc_blk0(M0)
+        M1 = M0
+        for i in range(7):
+            M1 = self.model_enc_blk1(M1)
+        M2 = M1
+        for i in range(7):
+            M2 = self.model_enc_blk2(M2)
+        p0, p1 = self.out(M0.to(device), M1.to(device), M2)
         p0, p1 = torch.exp(p0), torch.exp(p1)
         return p0, p1
 

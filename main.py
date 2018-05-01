@@ -31,6 +31,7 @@ def parse_args():
     args.add_argument("--batch_size", dest='batch_size', type=int, default="64")
     args.add_argument("--checkpoint", dest='checkpoint', type=int, default="10000")
     args.add_argument("--epoch", dest='epoch', type=int, default="10")
+    args.add_argument("--model", dest='model_fn', type=str, default="model/model.pt")
     return args.parse_args()
 
 
@@ -87,8 +88,9 @@ def trunk(packs, batch_size):
     return bpacks
 
 
-def train(epoch, data):
-    model = QANet(data).to(device)
+def train(epoch, data, model=None):
+    if model == None:
+        model = QANet(data).to(device)
     parameters = filter(lambda param: param.requires_grad, model.parameters())
     optimizer = optim.Adam(betas=(0.8, 0.999), eps=1e-7, weight_decay=3e-7, params=parameters)
     crit = 0.001 / math.log2(1000)
@@ -96,7 +98,7 @@ def train(epoch, data):
         ee + 1) if ee + 1 <= 1000 else 0.001)
     packs = trunk(data.train.packs, batch_size)
     f_log = open("log/model.log", "w")
-    test(model, data, 0, 0, 10, 50, f_log)
+    # test(model, data, ep=0, iter=0, test_num=10, test_size=50, f_log=f_log)
     try:
         for ep in range(epoch):
             print("EPOCH {:02d}: ".format(ep))
@@ -150,12 +152,12 @@ def evaluate_from_file(dataset_file, prediction_file):
 def test(model, data, ep, iter, test_num, test_size, f_log):
     full_packs = trunk(data.dev.packs, batch_size)
     l = len(full_packs)
-    anss = {}
     em_sum = 0
     f1_sum = 0
     tt = 0
     print("Testing...")
     for n in range(test_num):
+        anss = {}
         if test_size > 0:
             packs = full_packs[:test_size]
             l = test_size
@@ -181,7 +183,7 @@ def test(model, data, ep, iter, test_num, test_size, f_log):
         random.shuffle(full_packs)
     em = em_sum/test_num
     f1 = f1_sum/test_num
-    print("EM: {}, F1: {}, Total #: ".format(em, f1, tt))
+    print("EM: {}, F1: {}, Total #: {}".format(em, f1, tt))
     llog = "EPOCH: {:02d}\tITER: {:5d}\tEM: {:6.40f}\tF1: {:6.40f}\tNUM: {:5d}\n".format(ep + 1, iter + 1, em, f1, tt)
     f_log.write(llog)
     f_log.flush()
@@ -194,15 +196,18 @@ def main():
         os.mkdir(log_dir)
     if not os.path.exists(model_dir):
         os.mkdir(model_dir)
-    data = get_dataset()
+    data = get_dataset(shrink=250)
     if args.mode == 'all':
         model = train(args.epoch, data)
         test(model, data)
     elif args.mode == 'train':
-        train(args.epoch, data)
-    elif args.mode == 'test':
+        model_fn = args.model_fn
         model = torch.load(model_fn)
-        test(model, data)
+        train(args.epoch, data, model)
+    elif args.mode == 'test':
+        model_fn = args.model_fn
+        model = torch.load(model_fn)
+        test(model, data, ep=0, iter=0, test_num=10, test_size=100, f_log=open("log/test.log", "w"))
     else:
         print("Wrong arguments!")
 

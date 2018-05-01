@@ -328,7 +328,7 @@ def parse_data_III(squad):
     squad.wtoi = dict(wtoi)
 
 
-def get_dataset():
+def get_dataset(shrink):
     if os.path.exists('data/') and len(os.listdir('data/')) > 1:
         print("Found existing data.")
         squad = SQuAD.load('data/')
@@ -339,6 +339,19 @@ def get_dataset():
         parse_data_II(squad)
         parse_data_III(squad)
         squad.dump("data/")
+    if shrink < context_max_L:
+        packs = squad.train.packs
+        new_packs = []
+        for pack in packs:
+            if len(squad.train.contexts[pack[0]]) <= shrink:
+                new_packs.append(pack)
+        squad.train.packs = new_packs
+        packs = squad.dev.packs
+        new_packs = []
+        for pack in packs:
+            if len(squad.dev.contexts[pack[0]]) <= shrink:
+                new_packs.append(pack)
+        squad.dev.packs = new_packs
     return squad
 
 
