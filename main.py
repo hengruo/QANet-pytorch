@@ -31,7 +31,7 @@ def parse_args():
     args.add_argument("--batch_size", dest='batch_size', type=int, default="64")
     args.add_argument("--checkpoint", dest='checkpoint', type=int, default="10000")
     args.add_argument("--epoch", dest='epoch', type=int, default="10")
-    args.add_argument("--model", dest='model_fn', type=str, default="model/model.pt")
+    args.add_argument("--model", dest='model_fn', type=str, default=None)
     return args.parse_args()
 
 
@@ -196,18 +196,18 @@ def main():
         os.mkdir(log_dir)
     if not os.path.exists(model_dir):
         os.mkdir(model_dir)
-    data = get_dataset(shrink=250)
+    data = get_dataset(shrink=200)
+    if args.model_fn != None:
+        model_fn = args.model_fn
+        model = torch.load(model_fn)
+    else: model = None
     if args.mode == 'all':
         model = train(args.epoch, data)
         test(model, data)
     elif args.mode == 'train':
-        model_fn = args.model_fn
-        model = torch.load(model_fn)
         train(args.epoch, data, model)
     elif args.mode == 'test':
-        model_fn = args.model_fn
-        model = torch.load(model_fn)
-        test(model, data, ep=0, iter=0, test_num=10, test_size=100, f_log=open("log/test.log", "w"))
+        test(model, data, ep=0, iter=0, test_num=10, test_size=50, f_log=open("log/test.log", "w"))
     else:
         print("Wrong arguments!")
 
