@@ -6,8 +6,8 @@ import math
 dropout = 0.1
 dropout_w = 0.1
 dropout_c = 0.05
-batch_size = 24
-d_model = 128
+batch_size = 16
+d_model = 96
 h = 8
 d_k = d_model // h
 d_v = d_model // h
@@ -230,8 +230,7 @@ class QANet(nn.Module):
         super().__init__()
         self.char_emb = nn.Embedding(128, char_emb_size)
         self.word_emb = nn.Embedding.from_pretrained(torch.Tensor(data.word_embedding))
-        self.c_emb = Embedding()
-        self.q_emb = Embedding()
+        self.emb = Embedding()
         self.c_emb_enc = EncoderBlock(conv_num=4, ch_num=d_model, k=7)
         self.q_emb_enc = EncoderBlock(conv_num=4, ch_num=d_model, k=7)
         self.cq_att = CQAttention()
@@ -247,7 +246,7 @@ class QANet(nn.Module):
     def forward(self, Cwid, Ccid, Qwid, Qcid):
         Cw, Cc = self.word_emb(Cwid), self.char_emb(Ccid)
         Qw, Qc = self.word_emb(Qwid), self.char_emb(Qcid)
-        C, Q = self.c_emb(Cc, Cw), self.q_emb(Qc, Qw)
+        C, Q = self.emb(Cc, Cw), self.emb(Qc, Qw)
         C = self.c_emb_enc(C)
         Q = self.q_emb_enc(Q)
         X = self.cq_att(C, Q)

@@ -96,6 +96,7 @@ def train(epoch, data):
         ee + 1) if ee + 1 <= 1000 else 0.001)
     packs = trunk(data.train.packs, batch_size)
     f_log = open("log/model.log", "w")
+    test(model, data, 0, 0, 10, 50, f_log)
     try:
         for ep in range(epoch):
             print("EPOCH {:02d}: ".format(ep))
@@ -112,10 +113,8 @@ def train(epoch, data):
                 scheduler.step()
                 if (i+1) % checkpoint == 0:
                     torch.save(model, os.path.join(model_dir, "model-tmp-{:02d}-{}.pt".format(ep, i + 1)))
-            em, f1 = test(model, data)
-            llog = "EPOCH: {:02d}\tEM: {:6.40f}\tF1: {:6.40f}\n".format(ep + 1, i + 1, em, f1)
-            f_log.write(llog)
-            f_log.flush()
+                    test(model, data, ep, i, 10, 50, f_log)
+            test(model, data, ep, i, 1, -1, f_log)
             random.shuffle(packs)
         torch.save(model, os.path.join(model_dir, model_fn))
     except Exception as e:
@@ -145,30 +144,48 @@ def evaluate_from_file(dataset_file, prediction_file):
     with open(prediction_file) as prediction_file:
         predictions = uj.load(prediction_file)
     res = evaluation.evaluate(dataset, predictions)
-    return res['exact_match'], res['f1']
+    return res['exact_match'], res['f1'], res['total']
 
 
-def test(model, data):
-    packs = trunk(data.dev.packs, batch_size)
-    l = len(packs)
+def test(model, data, ep, iter, test_num, test_size, f_log):
+    full_packs = trunk(data.dev.packs, batch_size)
+    l = len(full_packs)
     anss = {}
+    em_sum = 0
+    f1_sum = 0
+    tt = 0
     print("Testing...")
-    for i in tqdm(range(l)):
-        pack = packs[i]
-        Cw, Cc, Qw, Qc, a = to_batch(pack, data, data.dev)
-        out1, out2 = model(Cw, Cc, Qw, Qc)
-        _, idx1 = torch.max(out1, dim=1)
-        _, idx2 = torch.max(out2, dim=1)
-        na = torch.cat([idx1.unsqueeze(1), idx2.unsqueeze(1)], dim=1)
-        for j in range(batch_size):
-            ans = get_anwser(na[j, 0], na[j, 1], pack[j][0], data.itow, data.dev)
-            anss[data.dev.question_ids[pack[j][1]]] = ans
-    with open('log/answer.json', 'w') as f:
-        uj.dump(anss, f)
-        f.close()
-        em, f1 = evaluate_from_file('tmp/squad/dev-v1.1.json', 'log/answer.json')
-        print("EM: {}, F1: {}".format(em, f1))
-    return em, f1
+    for n in range(test_num):
+        if test_size > 0:
+            packs = full_packs[:test_size]
+            l = test_size
+        else:
+            packs = full_packs
+        for i in range(l):
+            pack = packs[i]
+            Cw, Cc, Qw, Qc, a = to_batch(pack, data, data.dev)
+            out1, out2 = model(Cw, Cc, Qw, Qc)
+            torch.cuda.empty_cache()
+            _, idx1 = torch.max(out1, dim=1)
+            _, idx2 = torch.max(out2, dim=1)
+            na = torch.cat([idx1.unsqueeze(1), idx2.unsqueeze(1)], dim=1)
+            for j in range(batch_size):
+                ans = get_anwser(na[j, 0], na[j, 1], pack[j][0], data.itow, data.dev)
+                anss[data.dev.question_ids[pack[j][1]]] = ans
+        with open('log/answer.json', 'w') as f:
+            uj.dump(anss, f)
+            f.close()
+            em, f1, tt = evaluate_from_file('tmp/squad/dev-v1.1.json', 'log/answer.json')
+            em_sum += em
+            f1_sum += f1
+        random.shuffle(full_packs)
+    em = em_sum/test_num
+    f1 = f1_sum/test_num
+    print("EM: {}, F1: {}, Total #: ".format(em, f1, tt))
+    llog = "EPOCH: {:02d}\tITER: {:5d}\tEM: {:6.40f}\tF1: {:6.40f}\tNUM: {:5d}\n".format(ep + 1, iter + 1, em, f1, tt)
+    f_log.write(llog)
+    f_log.flush()
+    return em, f1, tt
 
 
 def main():
