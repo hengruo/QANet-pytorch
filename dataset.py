@@ -212,7 +212,7 @@ def convert_idx(text, tokens):
     return spans
 
 
-def parse_dataset(jsondata, squad: SQuAD, dataset: SQuAD.Dataset):
+def parse_train(jsondata, squad: SQuAD, dataset: SQuAD.Dataset):
     tokenizer = spacy.blank('en')
     cid, qid, aid = 0, 0, 0
     for item in jsondata:
@@ -246,6 +246,31 @@ def parse_dataset(jsondata, squad: SQuAD, dataset: SQuAD.Dataset):
             cid += 1
     dataset.length = len(dataset.packs)
 
+def parse_dev(jsondata, squad: SQuAD, dataset: SQuAD.Dataset):
+    tokenizer = spacy.blank('en')
+    cid, qid, aid = 0, 0, 0
+    for item in jsondata:
+        for para in item['paragraphs']:
+            context = para['context'].replace("''", '" ').replace("``", '" ')
+            context_tokens = [token.text for token in tokenizer(context)]
+            if len(context_tokens) > context_max_L: continue
+            context_token_wids = [squad.wtoi[tk] if tk in squad.wtoi else 0 for tk in context_tokens]
+            spans = convert_idx(context, context_tokens)
+            for qa in para['qas']:
+                ques = qa['question'].replace("''", '" ').replace("``", '" ')
+                ques_tokens = [token.text for token in tokenizer(ques)]
+                ques_token_wids = [squad.wtoi[tk] if tk in squad.wtoi else 0 for tk in ques_tokens]
+                ques_id = qa['id']
+                dataset.answers.append((0,0))
+                dataset.packs.append((cid, qid, aid))
+                aid += 1
+                dataset.questions.append(ques_token_wids)
+                dataset.question_ids.append(ques_id)
+                qid += 1
+            dataset.contexts.append(context_token_wids)
+            cid += 1
+    dataset.length = len(dataset.packs)
+
 
 def parse_data_II(squad):
     f = open(os.path.join(data_dir, train_filename), 'r')
@@ -254,9 +279,9 @@ def parse_data_II(squad):
     f = open(os.path.join(data_dir, dev_filename), 'r')
     dev = uj.load(f)['data']
     print("Parsing train dataset.")
-    parse_dataset(train, squad, squad.train)
+    parse_train(train, squad, squad.train)
     print("Parsing dev dataset.")
-    parse_dataset(dev, squad, squad.dev)
+    parse_dev(dev, squad, squad.dev)
     print("Parsing done.")
 
 
