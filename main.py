@@ -25,6 +25,7 @@ device = models.device
 cudnn.enabled = True
 max_char_num = models.max_char_num
 writer = SummaryWriter(".log")
+lr = 0.0001
 
 def parse_args():
     args = argparse.ArgumentParser(description="An R-net implementation.")
@@ -94,9 +95,9 @@ def train(epoch, data, model=None):
         model = QANet(data).to(device)
     parameters = filter(lambda param: param.requires_grad, model.parameters())
     optimizer = optim.Adam(betas=(0.8, 0.999), eps=1e-7, weight_decay=3e-7, params=parameters)
-    crit = 0.001 / math.log2(1000)
+    crit = lr / math.log2(1000)
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda ee: crit * math.log2(
-        ee + 1) if ee + 1 <= 1000 else 0.001)
+        ee + 1) if ee + 1 <= 1000 else lr)
     packs = trunk(data.train.packs, batch_size)
     f_log = open("log/model.log", "w")
     # test(model, data, ep=0, iter=0, test_num=10, test_size=50, f_log=f_log)
@@ -109,16 +110,16 @@ def train(epoch, data, model=None):
                 Cw, Cc, Qw, Qc, a = to_batch(pack, data, data.train)
                 optimizer.zero_grad()
                 out1, out2 = model(Cw, Cc, Qw, Qc)
-                loss1 = F.cross_entropy(out1, a[:, 0], size_average=False)
-                loss2 = F.cross_entropy(out2, a[:, 1], size_average=False)
-                loss = (loss1 + loss2) / batch_size
+                loss1 = F.cross_entropy(out1, a[:, 0])
+                loss2 = F.cross_entropy(out2, a[:, 1])
+                loss = loss1 + loss2
                 writer.add_scalar("data/loss", float(loss), ep*l+i)
                 loss.backward()
                 scheduler.step()
                 if (i+1) % checkpoint == 0:
                     torch.save(model, os.path.join(model_dir, "model-tmp-{:02d}-{}.pt".format(ep, i + 1)))
-                    test(model, data, ep, i, 10, 50, f_log)
-            test(model, data, ep, i, 1, -1, f_log)
+                    # test(model, data, ep, i, 10, 50, f_log)
+            # test(model, data, ep, i, 1, -1, f_log)
             random.shuffle(packs)
         torch.save(model, os.path.join(model_dir, model_fn))
         writer.close()
