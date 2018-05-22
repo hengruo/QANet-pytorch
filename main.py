@@ -174,50 +174,50 @@ def train(config):
     best_f1 = 0.
     best_em = 0.
 
-        with tf.Session(config=sess_config) as sess:
-            writer = tf.summary.FileWriter(config.log_dir)
-            sess.run(tf.global_variables_initializer())
-            saver = tf.train.Saver()
-            train_handle = sess.run(train_iterator.string_handle())
-            dev_handle = sess.run(dev_iterator.string_handle())
-            if os.path.exists(os.path.join(config.save_dir, "checkpoint")):
-                saver.restore(sess, tf.train.latest_checkpoint(config.save_dir))
-            global_step = max(sess.run(model.global_step), 1)
+    with tf.Session(config=sess_config) as sess:
+        writer = tf.summary.FileWriter(config.log_dir)
+        sess.run(tf.global_variables_initializer())
+        saver = tf.train.Saver()
+        train_handle = sess.run(train_iterator.string_handle())
+        dev_handle = sess.run(dev_iterator.string_handle())
+        if os.path.exists(os.path.join(config.save_dir, "checkpoint")):
+            saver.restore(sess, tf.train.latest_checkpoint(config.save_dir))
+        global_step = max(sess.run(model.global_step), 1)
 
-            for _ in tqdm(range(global_step, config.num_steps + 1)):
-                global_step = sess.run(model.global_step) + 1
-                loss, train_op = sess.run([model.loss, model.train_op], feed_dict={
-                                          handle: train_handle, model.dropout: config.dropout})
-                if global_step % config.period == 0:
-                    loss_sum = tf.Summary(value=[tf.Summary.Value(
-                        tag="model/loss", simple_value=loss), ])
-                    writer.add_summary(loss_sum, global_step)
-                if global_step % config.checkpoint == 0:
-                    _, summ = evaluate_batch(
-                        model, config.val_num_batches, train_eval_file, sess, "train", handle, train_handle)
-                    for s in summ:
-                        writer.add_summary(s, global_step)
+        for _ in tqdm(range(global_step, config.num_steps + 1)):
+            global_step = sess.run(model.global_step) + 1
+            loss, train_op = sess.run([model.loss, model.train_op], feed_dict={
+                                      handle: train_handle, model.dropout: config.dropout})
+            if global_step % config.period == 0:
+                loss_sum = tf.Summary(value=[tf.Summary.Value(
+                    tag="model/loss", simple_value=loss), ])
+                writer.add_summary(loss_sum, global_step)
+            if global_step % config.checkpoint == 0:
+                _, summ = evaluate_batch(
+                    model, config.val_num_batches, train_eval_file, sess, "train", handle, train_handle)
+                for s in summ:
+                    writer.add_summary(s, global_step)
 
-                    metrics, summ = evaluate_batch(
-                        model, dev_total // config.batch_size + 1, dev_eval_file, sess, "dev", handle, dev_handle)
+                metrics, summ = evaluate_batch(
+                    model, dev_total // config.batch_size + 1, dev_eval_file, sess, "dev", handle, dev_handle)
 
-                    dev_f1 = metrics["f1"]
-                    dev_em = metrics["exact_match"]
-                    if dev_f1 < best_f1 and dev_em < best_em:
-                        patience += 1
-                        if patience > config.early_stop:
-                            break
-                    else:
-                        patience = 0
-                        best_em = max(best_em, dev_em)
-                        best_f1 = max(best_f1, dev_f1)
+                dev_f1 = metrics["f1"]
+                dev_em = metrics["exact_match"]
+                if dev_f1 < best_f1 and dev_em < best_em:
+                    patience += 1
+                    if patience > config.early_stop:
+                        break
+                else:
+                    patience = 0
+                    best_em = max(best_em, dev_em)
+                    best_f1 = max(best_f1, dev_f1)
 
-                    for s in summ:
-                        writer.add_summary(s, global_step)
-                    writer.flush()
-                    filename = os.path.join(
-                        config.save_dir, "model_{}.ckpt".format(global_step))
-                    saver.save(sess, filename)
+                for s in summ:
+                    writer.add_summary(s, global_step)
+                writer.flush()
+                filename = os.path.join(
+                    config.save_dir, "model_{}.ckpt".format(global_step))
+                saver.save(sess, filename)
 
 def main(_):
     if config.mode == "train":
@@ -232,8 +232,6 @@ def main(_):
         train(config)
     elif config.mode == "test":
         test(config)
-    elif config.mode == "demo":
-        demo(config)
     else:
         print("Unknown mode")
         exit(0)
