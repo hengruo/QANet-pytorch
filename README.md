@@ -1,12 +1,13 @@
 # QANet-pytorch
 
+## NOTICE
+This repo is under re-implementation. Due to frequent modification, this code may not run normally.
+
 ## Introduction
 
 An implementation of [QANet](https://arxiv.org/pdf/1804.09541.pdf) with PyTorch.
 
-Now it can reach EM/F1 = 70.5/77.2 after 20 epoches for about 20 hours on one 1080Ti card.
-
-This repo is under re-implementation.
+Now it can reach EM/F1 = 70.5/77.2 after 20 epoches for about 20 hours on one 1080Ti card.  
 
 ## Usage
 

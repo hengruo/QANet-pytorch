@@ -6,7 +6,7 @@ import ujson as uj
 import spacy
 from collections import defaultdict
 import copy
-from models import CharEmbedding, word_emb_size, char_emb_size
+from models import CharEmbedding, word_dim, char_dim
 import torch
 from tqdm import *
 
@@ -173,7 +173,7 @@ def parse_data_I(squad: SQuAD):
     specials = ['<UNK>', '<PAD>', '<SOS>', '<EOS>']
     [ctoi[x] for x in specials]
     [wtoi[x] for x in specials]
-    cemb = [np.zeros(word_emb_size) for _ in specials]
+    cemb = [np.zeros(word_dim) for _ in specials]
     wemb = copy.deepcopy(cemb)
     print('Reading char embeddings')
     for line in cembf.readlines():
@@ -305,7 +305,7 @@ def parse_data_III(squad):
     wtoi = defaultdict(lambda: len(wtoi))
     specials = ['<UNK>', '<PAD>', '<SOS>', '<EOS>']
     [wtoi[x] for x in specials]
-    wemb = [np.zeros(word_emb_size) for _ in specials]
+    wemb = [np.zeros(word_dim) for _ in specials]
     squad.train.contexts = get_embeddings(squad.train.contexts, squad, wemb, wtoi)
     squad.dev.contexts = get_embeddings(squad.dev.contexts, squad, wemb, wtoi)
     squad.train.questions = get_embeddings(squad.train.questions, squad, wemb, wtoi)
@@ -315,7 +315,7 @@ def parse_data_III(squad):
         itow[wtoi[word]] = word
     charemb = CharEmbedding()
     print('Generating word\'s char-level embeddings')
-    wcemb = [np.zeros(char_emb_size) for _ in specials]
+    wcemb = [np.zeros(char_dim) for _ in specials]
     for i in tqdm(range(4, len(wemb))):
         chars = torch.FloatTensor(
             [squad.char_embedding[squad.ctoi[c]] if c in squad.ctoi else squad.char_embedding[0] for c in
