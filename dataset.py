@@ -354,11 +354,33 @@ def get_dataset(shrink):
         squad.dev.packs = new_packs
     return squad
 
+def test():
+    def get_anwser(i, j, pid, itow, dataset):
+        p = dataset.contexts[pid]
+        i, j = min(i, j), max(i, j)
+        if j >= len(p): return ""
+        ans_ = []
+        for t in range(j - i + 1):
+            ans_.append(p[i + t])
+        ans = ""
+        for a in ans_:
+            ans += itow[a] + ' '
+        return ans[:-1]
+    squad = SQuAD.load("data/")
+    sample = squad.train.packs[:100]
+    anss = {}
+    for p in sample:
+        qid = p[1]
+        aid = p[2]
+        span = squad.train.answers[aid]
+        anss[squad.train.question_ids[qid]] = get_anwser(span[0], span[1], p[0], squad.itow, squad.train)
+    uj.dump(anss, open("tmp/squad/sample.json", "w"))
 
 if __name__ == "__main__":
-    squad = SQuAD()
-    parse_data_I(squad)
-    parse_data_II(squad)
-    squad.dump("data/")
-    parse_data_III(squad)
-    squad.dump("data/")
+    # squad = SQuAD()
+    # parse_data_I(squad)
+    # parse_data_II(squad)
+    # squad.dump("data/")
+    # parse_data_III(squad)
+    # squad.dump("data/")
+    test()
