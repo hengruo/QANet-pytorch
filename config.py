@@ -12,9 +12,9 @@ test_file = os.path.join(home, "data", "squad", "dev-v1.1.json")
 glove_word_file = os.path.join(home, "data", "glove", "glove.840B.300d.txt")
 
 target_dir = "data"
-event_dir = "log/event"
-save_dir = "log/model"
-answer_dir = "log/answer"
+event_dir = "log"
+save_dir = "model"
+answer_dir = "log"
 train_record_file = os.path.join(target_dir, "train.npz")
 dev_record_file = os.path.join(target_dir, "dev.npz")
 test_record_file = os.path.join(target_dir, "test.npz")
@@ -97,6 +97,8 @@ flags.DEFINE_integer("hidden", 96, "Hidden size")
 flags.DEFINE_integer("early_stop", 10, "Checkpoints for early stop")
 flags.DEFINE_integer("connector_dim", 128, "Dimension of connectors of each layer")
 flags.DEFINE_integer("num_heads", 8, "Number of heads in multi-head attention")
+
+flags.DEFINE_string("train_log", "log/train.log", "Log for each checkpoint")
 
 # Extensions (Uncomment corresponding line in download.sh to download the required data)
 glove_char_file = os.path.join(home, "data", "glove", "glove.840B.300d-char.txt")

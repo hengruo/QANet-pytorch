@@ -2,6 +2,7 @@ from config import config
 from preproc import preproc
 from absl import app
 import math
+import os
 import numpy as np
 import ujson as json
 import re
@@ -15,6 +16,8 @@ import torch.optim as optim
 import torch.cuda
 import torch.backends.cudnn as cudnn
 from torch.utils.data import Dataset, DataLoader
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class SQuADDataset(Dataset):
@@ -46,9 +49,10 @@ class SQuADDataset(Dataset):
         return self.num_steps
 
     def __getitem__(self, item):
-        idxs = torch.Tensor(self.idx_map[item:item+self.batch_size]).long()
-        res = (self.context_idxs[idxs], self.context_char_idxs[idxs], self.ques_idxs[idxs], self.ques_char_idxs[idxs], self.y1s[idxs],
-         self.y2s[idxs], self.ids[idxs])
+        idxs = torch.Tensor(self.idx_map[item:item + self.batch_size]).long()
+        res = (self.context_idxs[idxs], self.context_char_idxs[idxs], self.ques_idxs[idxs], self.ques_char_idxs[idxs],
+               self.y1s[idxs],
+               self.y2s[idxs], self.ids[idxs])
         return res
 
 
@@ -123,6 +127,27 @@ def metric_max_over_ground_truths(metric_fn, prediction, ground_truths):
     return max(scores_for_ground_truths)
 
 
+def evaluate_batch(model, eval_file, dataset):
+    answer_dict = {}
+    losses = []
+    num_batches = len(dataset)
+    for i in tqdm(range(num_batches)):
+        (Cwid, Ccid, Qwid, Qcid, y1, y2, ids) = dataset[i]
+        p1, p2 = model(Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device))
+        y1, y2 = y1.to(device), y2.to(device)
+        loss1 = F.cross_entropy(p1, y1)
+        loss2 = F.cross_entropy(p2, y1)
+        loss = loss1 + loss2
+        losses += loss.tolist()
+        answer_dict_, _ = convert_tokens(
+            eval_file, ids.tolist(), y1.tolist(), y2.tolist())
+        answer_dict.update(answer_dict_)
+    loss = np.mean(losses)
+    metrics = evaluate(eval_file, answer_dict)
+    metrics["loss"] = loss
+    return metrics
+
+
 def train(config):
     from models import QANet
 
@@ -136,14 +161,14 @@ def train(config):
         dev_eval_file = json.load(fh)
     with open(config.dev_meta, "r") as fh:
         meta = json.load(fh)
+    train_log = open(config.train_log, "w")
 
     dev_total = meta["total"]
     print("Building model...")
 
     train_dataset = SQuADDataset(config.train_record_file, config.num_steps, config.batch_size)
-    dev_dataset = SQuADDataset(config.dev_record_file, config.num_steps, config.batch_size)
+    dev_dataset = SQuADDataset(config.dev_record_file, config.val_num_batches, config.batch_size)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     lr = config.learning_rate
 
     model = QANet(word_mat, char_mat).to(device)
@@ -162,6 +187,26 @@ def train(config):
         loss = loss1 + loss2
         loss.backward()
         scheduler.step()
+        if ep % config.checkpoint == 0:
+            metric = evaluate_batch(model, dev_eval_file, dev_dataset)
+            log_ = "EPOCH {:8d} loss {:8f} F1 {:8f} EM {:8f}\n".format(ep, metric["loss"], metric["f1"],
+                                                                       metric["exact_match"])
+            train_log.write(log_)
+            train_log.flush()
+            dev_f1 = metric["f1"]
+            dev_em = metric["exact_match"]
+            if dev_f1 < best_f1 and dev_em < best_em:
+                patience += 1
+                if patience > config.early_stop:
+                    break
+            else:
+                patience = 0
+                best_em = max(best_em, dev_em)
+                best_f1 = max(best_f1, dev_f1)
+
+            fn = os.path.join(config.save_dir, "model_{}.ckpt".format(ep))
+            torch.save(model, fn, pickle_protocol=False)
+
 
 def test(config):
     pass
