@@ -1,79 +1,55 @@
 from config import config
 from preproc import preproc
 from absl import app
-from absl import logging
+import math
 import numpy as np
 import ujson as json
 import re
 from collections import Counter
 import string
-from models import QANet
+from tqdm import tqdm
+import random
+import torch
+import torch.nn.functional as F
+import torch.optim as optim
+import torch.cuda
+import torch.backends.cudnn as cudnn
+from torch.utils.data import Dataset, DataLoader
 
 
-def get_record_parser(config, is_test=False):
-    def parse(example):
-        para_limit = config.test_para_limit if is_test else config.para_limit
-        ques_limit = config.test_ques_limit if is_test else config.ques_limit
-        char_limit = config.char_limit
-        features = tf.parse_single_example(example,
-                                           features={
-                                               "context_idxs": tf.FixedLenFeature([], tf.string),
-                                               "ques_idxs": tf.FixedLenFeature([], tf.string),
-                                               "context_char_idxs": tf.FixedLenFeature([], tf.string),
-                                               "ques_char_idxs": tf.FixedLenFeature([], tf.string),
-                                               "y1": tf.FixedLenFeature([], tf.string),
-                                               "y2": tf.FixedLenFeature([], tf.string),
-                                               "id": tf.FixedLenFeature([], tf.int64)
-                                           })
-        context_idxs = tf.reshape(tf.decode_raw(
-            features["context_idxs"], tf.int32), [para_limit])
-        ques_idxs = tf.reshape(tf.decode_raw(
-            features["ques_idxs"], tf.int32), [ques_limit])
-        context_char_idxs = tf.reshape(tf.decode_raw(
-            features["context_char_idxs"], tf.int32), [para_limit, char_limit])
-        ques_char_idxs = tf.reshape(tf.decode_raw(
-            features["ques_char_idxs"], tf.int32), [ques_limit, char_limit])
-        y1 = tf.reshape(tf.decode_raw(
-            features["y1"], tf.float32), [para_limit])
-        y2 = tf.reshape(tf.decode_raw(
-            features["y2"], tf.float32), [para_limit])
-        qa_id = features["id"]
-        return context_idxs, ques_idxs, context_char_idxs, ques_char_idxs, y1, y2, qa_id
-    return parse
+class SQuADDataset(Dataset):
+    def __init__(self, npz_file, num_steps, batch_size):
+        data = np.load(npz_file)
+        self.context_idxs = torch.Tensor(data["context_idxs"]).long()
+        self.context_char_idxs = torch.Tensor(data["context_char_idxs"]).long()
+        self.ques_idxs = torch.Tensor(data["ques_idxs"]).long()
+        self.ques_char_idxs = torch.Tensor(data["ques_char_idxs"]).long()
+        self.y1s = torch.Tensor(data["y1s"]).long()
+        self.y2s = torch.Tensor(data["y2s"]).long()
+        self.ids = torch.Tensor(data["ids"]).long()
+        num = len(self.ids)
+        self.num_steps = num_steps
+        self.batch_size = batch_size
+        idxs = list(range(num))
+        self.idx_map = []
+        i, j = 0, num
+        num_items = num_steps * batch_size
+        while j <= num_items:
+            random.shuffle(idxs)
+            self.idx_map += idxs.copy()
+            i = j
+            j += num
+        random.shuffle(idxs)
+        self.idx_map += idxs[:num_items - i]
 
+    def __len__(self):
+        return self.num_steps
 
-def get_batch_dataset(record_file, parser, config):
-    num_threads = tf.constant(config.num_threads, dtype=tf.int32)
-    dataset = tf.data.TFRecordDataset(record_file).map(
-        parser, num_parallel_calls=num_threads).shuffle(config.capacity).repeat()
-    if config.is_bucket:
-        buckets = [tf.constant(num) for num in range(*config.bucket_range)]
-
-        def key_func(context_idxs, ques_idxs, context_char_idxs, ques_char_idxs, y1, y2, qa_id):
-            c_len = tf.reduce_sum(
-                tf.cast(tf.cast(context_idxs, tf.bool), tf.int32))
-            buckets_min = [np.iinfo(np.int32).min] + buckets
-            buckets_max = buckets + [np.iinfo(np.int32).max]
-            conditions_c = tf.logical_and(
-                tf.less(buckets_min, c_len), tf.less_equal(c_len, buckets_max))
-            bucket_id = tf.reduce_min(tf.where(conditions_c))
-            return bucket_id
-
-        def reduce_func(key, elements):
-            return elements.batch(config.batch_size)
-
-        dataset = dataset.apply(tf.contrib.data.group_by_window(
-            key_func, reduce_func, window_size=5 * config.batch_size)).shuffle(len(buckets) * 25)
-    else:
-        dataset = dataset.batch(config.batch_size)
-    return dataset
-
-
-def get_dataset(record_file, parser, config):
-    num_threads = tf.constant(config.num_threads, dtype=tf.int32)
-    dataset = tf.data.TFRecordDataset(record_file).map(
-        parser, num_parallel_calls=num_threads).repeat().batch(config.batch_size)
-    return dataset
+    def __getitem__(self, item):
+        idxs = torch.Tensor(self.idx_map[item:item+self.batch_size]).long()
+        res = (self.context_idxs[idxs], self.context_char_idxs[idxs], self.ques_idxs[idxs], self.ques_char_idxs[idxs], self.y1s[idxs],
+         self.y2s[idxs], self.ids[idxs])
+        return res
 
 
 def convert_tokens(eval_file, qa_id, pp1, pp2):
@@ -106,7 +82,6 @@ def evaluate(eval_file, answer_dict):
 
 
 def normalize_answer(s):
-
     def remove_articles(text):
         return re.sub(r'\b(a|an|the)\b', ' ', text)
 
@@ -147,7 +122,10 @@ def metric_max_over_ground_truths(metric_fn, prediction, ground_truths):
         scores_for_ground_truths.append(score)
     return max(scores_for_ground_truths)
 
+
 def train(config):
+    from models import QANet
+
     with open(config.word_emb_file, "r") as fh:
         word_mat = np.array(json.load(fh), dtype=np.float32)
     with open(config.char_emb_file, "r") as fh:
@@ -161,63 +139,33 @@ def train(config):
 
     dev_total = meta["total"]
     print("Building model...")
-    parser = get_record_parser(config)
 
-    train_dataset = get_batch_dataset(config.train_record_file, parser, config)
-    dev_dataset = get_dataset(config.dev_record_file, parser, config)
+    train_dataset = SQuADDataset(config.train_record_file, config.num_steps, config.batch_size)
+    dev_dataset = SQuADDataset(config.dev_record_file, config.num_steps, config.batch_size)
 
-    model = QANet(word_mat, char_mat)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    lr = config.learning_rate
 
+    model = QANet(word_mat, char_mat).to(device)
+    parameters = filter(lambda param: param.requires_grad, model.parameters())
+    optimizer = optim.Adam(betas=(0.8, 0.999), eps=1e-7, weight_decay=3e-7, params=parameters)
+    crit = lr / math.log2(1000)
+    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda ee: crit * math.log2(
+        ee + 1) if ee + 1 <= 1000 else lr)
 
-    loss_save = 100.0
-    patience = 0
-    best_f1 = 0.
-    best_em = 0.
+    for ep in tqdm(range(config.num_steps)):
+        (Cwid, Ccid, Qwid, Qcid, y1, y2, ids) = train_dataset[ep]
+        p1, p2 = model(Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device))
+        y1, y2 = y1.to(device), y2.to(device)
+        loss1 = F.cross_entropy(p1, y1)
+        loss2 = F.cross_entropy(p2, y1)
+        loss = loss1 + loss2
+        loss.backward()
+        scheduler.step()
 
-    with tf.Session(config=sess_config) as sess:
-        writer = tf.summary.FileWriter(config.log_dir)
-        sess.run(tf.global_variables_initializer())
-        saver = tf.train.Saver()
-        train_handle = sess.run(train_iterator.string_handle())
-        dev_handle = sess.run(dev_iterator.string_handle())
-        if os.path.exists(os.path.join(config.save_dir, "checkpoint")):
-            saver.restore(sess, tf.train.latest_checkpoint(config.save_dir))
-        global_step = max(sess.run(model.global_step), 1)
+def test(config):
+    pass
 
-        for _ in tqdm(range(global_step, config.num_steps + 1)):
-            global_step = sess.run(model.global_step) + 1
-            loss, train_op = sess.run([model.loss, model.train_op], feed_dict={
-                                      handle: train_handle, model.dropout: config.dropout})
-            if global_step % config.period == 0:
-                loss_sum = tf.Summary(value=[tf.Summary.Value(
-                    tag="model/loss", simple_value=loss), ])
-                writer.add_summary(loss_sum, global_step)
-            if global_step % config.checkpoint == 0:
-                _, summ = evaluate_batch(
-                    model, config.val_num_batches, train_eval_file, sess, "train", handle, train_handle)
-                for s in summ:
-                    writer.add_summary(s, global_step)
-
-                metrics, summ = evaluate_batch(
-                    model, dev_total // config.batch_size + 1, dev_eval_file, sess, "dev", handle, dev_handle)
-
-                dev_f1 = metrics["f1"]
-                dev_em = metrics["exact_match"]
-                if dev_f1 < best_f1 and dev_em < best_em:
-                    patience += 1
-                    if patience > config.early_stop:
-                        break
-                else:
-                    patience = 0
-                    best_em = max(best_em, dev_em)
-                    best_f1 = max(best_f1, dev_f1)
-
-                for s in summ:
-                    writer.add_summary(s, global_step)
-                writer.flush()
-                filename = os.path.join(
-                    config.save_dir, "model_{}.ckpt".format(global_step))
-                saver.save(sess, filename)
 
 def main(_):
     if config.mode == "train":
@@ -235,6 +183,7 @@ def main(_):
     else:
         print("Unknown mode")
         exit(0)
+
 
 if __name__ == '__main__':
     app.run(main)

@@ -266,9 +266,9 @@ class QANet(nn.Module):
         M2 = M1
         for i in range(7):
             M2 = self.model_enc_blk2(M2)
-        p0, p1 = self.out(M0.to(device), M1.to(device), M2)
-        p0, p1 = torch.exp(p0), torch.exp(p1)
-        return p0, p1
+        p1, p2 = self.out(M0.to(device), M1.to(device), M2)
+        p1, p2 = torch.exp(p1), torch.exp(p2)
+        return p1, p2
 
 
 if __name__ == "__main__":
