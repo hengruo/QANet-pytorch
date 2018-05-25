@@ -136,7 +136,7 @@ def evaluate_batch(model, eval_file, dataset):
         loss1 = F.cross_entropy(p1, y1)
         loss2 = F.cross_entropy(p2, y1)
         loss = loss1 + loss2
-        losses.append(loss)
+        losses.append(loss.data)
         answer_dict_, _ = convert_tokens(
             eval_file, ids.tolist(), y1.tolist(), y2.tolist())
         answer_dict.update(answer_dict_)
@@ -184,7 +184,7 @@ def train(config):
         loss1 = F.cross_entropy(p1, y1)
         loss2 = F.cross_entropy(p2, y1)
         loss = loss1 + loss2
-        loss.backward(retain_variables=True)
+        loss.backward(retain_graph=True)
         scheduler.step()
         model.zero_grad()
         if ep % config.checkpoint == 0:
@@ -214,7 +214,7 @@ def test(config):
     pass
 
 def dev(config):
-    from models import EncoderBlock, CharEmbedding
+    from models import EncoderBlock
     encoder = EncoderBlock(4, config.connector_dim, 7)
     print(encoder._parameters)
 

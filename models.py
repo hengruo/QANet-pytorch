@@ -17,52 +17,18 @@ d_v = conn_dim // num_head
 cq_att_size = conn_dim * 4
 
 
-def norm(x, eps=1e-6):
-    mean = x.mean(-1, keepdim=True)
-    std = x.std(-1, keepdim=True)
-    return (x - mean) / (std + eps)
-
-
 class PosEncoder(nn.Module):
-    def __init__(self):
+    def __init__(self, length):
         super().__init__()
         freqs = torch.Tensor([10000 ** (-i / conn_dim) if i % 2 == 0 else -10000 ** (-(i - 1) / conn_dim) for i in
                               range(conn_dim)]).unsqueeze(dim=1)
         phases = torch.Tensor([0 if i % 2 == 0 else math.pi / 2 for i in range(conn_dim)]).unsqueeze(dim=1)
-        para_pos = torch.arange(config.para_limit).repeat(conn_dim, 1)
-        ques_pos = torch.arange(config.ques_limit).repeat(conn_dim, 1)
-        self.para_pos_encoding = nn.Parameter(torch.sin(torch.add(torch.mul(para_pos, freqs), phases)).data)
-        self.ques_pos_encoding = nn.Parameter(torch.sin(torch.add(torch.mul(ques_pos, freqs), phases)).data)
+        pos = torch.arange(length).repeat(conn_dim, 1)
+        self.pos_encoding = nn.Parameter(torch.sin(torch.add(torch.mul(pos, freqs), phases)).data)
 
     def forward(self, x):
-        (_, _, l) = x.size()
-        if l == config.para_limit:
-            out = self.para_pos_encoding + x
-        elif l == config.ques_limit:
-            out = self.ques_pos_encoding + x
-        else:
-            raise ValueError("Wrong data length. Neither {} nor {}".format(config.para_limit, config.ques_limit))
+        out = self.pos_encoding + x
         return out
-
-
-# Using bidirectional gru hidden state to represent char embedding for a word
-class CharEmbedding(nn.Module):
-    def __init__(self, in_size=word_dim):
-        super().__init__()
-        self.num_layers = 1
-        self.bidirectional = True
-        self.dir = 2 if self.bidirectional else 1
-        self.hidden_size = 100
-        self.in_size = in_size
-        self.gru = nn.GRU(input_size=in_size, bidirectional=self.bidirectional, num_layers=self.num_layers,
-                          hidden_size=self.hidden_size)
-        self.h = torch.randn(self.num_layers * self.dir, 1, self.hidden_size)
-        self.out_size = self.hidden_size * self.num_layers * self.dir
-
-    def forward(self, input):
-        o, h = self.gru(input, self.h)
-        h = h.view(-1)
-        return h
 
 
 class DepthwiseSeparableConv(nn.Module):
@@ -163,37 +129,39 @@ class Embedding(nn.Module):
 
 
 class EncoderBlock(nn.Module):
-    def __init__(self, conv_num: int, ch_num: int, k: int):
+    def __init__(self, conv_num: int, ch_num: int, k: int, length: int):
         super().__init__()
         self.convs = nn.ModuleList([DepthwiseSeparableConv(ch_num, ch_num, k) for _ in range(conv_num)])
         self.self_att = SelfAttention()
         W = torch.empty(batch_size, ch_num, ch_num)
         nn.init.xavier_normal_(W)
         self.W = nn.Parameter(W.data)
-        self.pos = PosEncoder()
+        self.pos = PosEncoder(length)
         self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(p=dropout)
+        self.norm = nn.LayerNorm([conn_dim, length])
 
     def forward(self, x):
         out = self.pos(x)
         res = out
         for i, conv in enumerate(self.convs):
-            out = norm(out)
+            out = self.norm(out)
             out = conv(out)
             out = self.relu(out)
             out = res + out
             if (i + 1) % 2 == 0:
-                out = F.dropout(out, p=dropout, training=True)
+                out = self.dropout(out)
             res = out
-        out = norm(out)
+            out = self.norm(out)
         out = self.self_att(out)
         out = res + out
-        out = F.dropout(out, p=dropout, training=True)
+        out = self.dropout(out)
         res = out
-        out = norm(out)
+        out = self.norm(out)
         out = torch.bmm(self.W, out)
         out = self.relu(out)
         out = res + out
-        out = F.dropout(out, p=dropout, training=True)
+        out = self.dropout(out)
         return out
 
 
@@ -204,6 +172,7 @@ class CQAttention(nn.Module):
         nn.init.xavier_normal_(W)
         self.W = nn.Parameter(W.data)
         self.S = nn.Parameter(torch.zeros(batch_size, config.para_limit, config.ques_limit).data, requires_grad=False)
+        self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, C, Q):
         for i in range(config.para_limit):
@@ -212,12 +181,12 @@ class CQAttention(nn.Module):
                 q = Q[:, :, j]
                 v = torch.cat([q, c, torch.mul(q, c)], dim=1).unsqueeze(dim=2)
                 self.S[:, i, j] = torch.bmm(self.W, v).squeeze()
-        S_ = F.softmax(self.S, dim=2)
-        S__ = F.softmax(self.S, dim=1)
-        A = torch.bmm(Q, S_.transpose(1, 2))
-        B = torch.bmm(C, torch.bmm(S_, S__.transpose(1, 2)).transpose(1, 2))
+        S1 = F.softmax(self.S, dim=2)
+        S2 = F.softmax(self.S, dim=1)
+        A = torch.bmm(Q, S1.transpose(1, 2))
+        B = torch.bmm(C, torch.bmm(S1, S2.transpose(1, 2)).transpose(1, 2))
         out = torch.cat([C, A, torch.mul(C, A), torch.mul(C, B)], dim=1)
-        out = F.dropout(out, p=dropout, training=True)
+        out = self.dropout(out)
         return out
 
 
@@ -247,33 +216,30 @@ class QANet(nn.Module):
         self.char_emb = nn.Embedding.from_pretrained(torch.Tensor(char_mat), freeze=(not config.pretrained_char))
         self.word_emb = nn.Embedding.from_pretrained(torch.Tensor(word_mat))
         self.emb = Embedding()
-        self.c_emb_enc = EncoderBlock(conv_num=4, ch_num=conn_dim, k=7)
-        self.q_emb_enc = EncoderBlock(conv_num=4, ch_num=conn_dim, k=7)
+        self.c_emb_enc = EncoderBlock(conv_num=4, ch_num=conn_dim, k=7, length=config.para_limit)
+        self.q_emb_enc = EncoderBlock(conv_num=4, ch_num=conn_dim, k=7, length=config.ques_limit)
         self.cq_att = CQAttention()
         self.cq_resizer = DepthwiseSeparableConv(conn_dim * 4, conn_dim, 5)
         self.enc_num = 3
-        self.model_enc_blk0 = EncoderBlock(conv_num=2, ch_num=conn_dim, k=5)
-        self.model_enc_blk1 = EncoderBlock(conv_num=2, ch_num=conn_dim, k=5)
-        self.model_enc_blk2 = EncoderBlock(conv_num=2, ch_num=conn_dim, k=5)
+        enc_blk1 = EncoderBlock(conv_num=2, ch_num=conn_dim, k=5, length=config.para_limit)
+        enc_blk2 = EncoderBlock(conv_num=2, ch_num=conn_dim, k=5, length=config.para_limit)
+        enc_blk3 = EncoderBlock(conv_num=2, ch_num=conn_dim, k=5, length=config.para_limit)
+        self.model_enc_blks1 = nn.Sequential(*([enc_blk1] * 7))
+        self.model_enc_blks2 = nn.Sequential(*([enc_blk2] * 7))
+        self.model_enc_blks3 = nn.Sequential(*([enc_blk3] * 7))
         self.out = Pointer()
 
     def forward(self, Cwid, Ccid, Qwid, Qcid):
         Cw, Cc = self.word_emb(Cwid), self.char_emb(Ccid)
         Qw, Qc = self.word_emb(Qwid), self.char_emb(Qcid)
         C, Q = self.emb(Cc, Cw), self.emb(Qc, Qw)
-        C = self.c_emb_enc(C)
-        Q = self.q_emb_enc(Q)
-        X = self.cq_att(C, Q)
-        X = self.cq_resizer(X)
-        M1 = X
-        for i in range(7):
-            M1 = self.model_enc_blk0(M1)
-        M2 = M1
-        for i in range(7):
-            M2 = self.model_enc_blk1(M2)
-        M3 = M2
-        for i in range(7):
-            M3 = self.model_enc_blk2(M3)
+        Ce = self.c_emb_enc(C)
+        Qe = self.q_emb_enc(Q)
+        X = self.cq_att(Ce, Qe)
+        M0 = self.cq_resizer(X)
+        M1 = self.model_enc_blks1(M0)
+        M2 = self.model_enc_blks2(M1)
+        M3 = self.model_enc_blks3(M2)
         p1, p2 = self.out(M1, M2, M3)
         p1, p2 = torch.exp(p1), torch.exp(p2)
         return p1, p2
