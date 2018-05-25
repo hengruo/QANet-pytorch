@@ -95,7 +95,7 @@ flags.DEFINE_float("decay", 0.9999, "Exponential moving average decay")
 flags.DEFINE_float("l2_norm", 3e-7, "L2 norm scale")
 flags.DEFINE_integer("hidden", 96, "Hidden size")
 flags.DEFINE_integer("early_stop", 10, "Checkpoints for early stop")
-flags.DEFINE_integer("connector_dim", 128, "Dimension of connectors of each layer")
+flags.DEFINE_integer("connector_dim", 96, "Dimension of connectors of each layer")
 flags.DEFINE_integer("num_heads", 8, "Number of heads in multi-head attention")
 
 flags.DEFINE_string("train_log", "log/train.log", "Log for each checkpoint")
