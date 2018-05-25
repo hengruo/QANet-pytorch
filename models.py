@@ -108,15 +108,15 @@ class SelfAttention(nn.Module):
         Wqs = [torch.empty(batch_size, d_k, conn_dim) for _ in range(num_head)]
         Wks = [torch.empty(batch_size, d_k, conn_dim) for _ in range(num_head)]
         Wvs = [torch.empty(batch_size, d_v, conn_dim) for _ in range(num_head)]
-        nn.init.xavier_normal_(self.Wo)
+        nn.init.xavier_normal_(Wo)
         for i in range(num_head):
-            nn.init.xavier_normal_(self.Wqs[i])
-            nn.init.xavier_normal_(self.Wks[i])
-            nn.init.xavier_normal_(self.Wvs[i])
+            nn.init.xavier_normal_(Wqs[i])
+            nn.init.xavier_normal_(Wks[i])
+            nn.init.xavier_normal_(Wvs[i])
         self.Wo = nn.Parameter(Wo.data)
-        self.Wqs = nn.ParameterList([X.data for X in Wqs])
-        self.Wks = nn.ParameterList([X.data for X in Wks])
-        self.Wvs = nn.ParameterList([X.data for X in Wvs])
+        self.Wqs = nn.ParameterList([nn.Parameter(X.data) for X in Wqs])
+        self.Wks = nn.ParameterList([nn.Parameter(X.data) for X in Wks])
+        self.Wvs = nn.ParameterList([nn.Parameter(X.data) for X in Wvs])
 
     def forward(self, x: torch.Tensor):
         WQs, WKs, WVs = [], [], []
@@ -203,7 +203,7 @@ class CQAttention(nn.Module):
         W = torch.empty(batch_size, 1, conn_dim * 3)
         nn.init.xavier_normal_(W)
         self.W = nn.Parameter(W.data)
-        self.S = nn.Parameter(torch.zeros(batch_size, config.para_limit, config.ques_limit).data)
+        self.S = nn.Parameter(torch.zeros(batch_size, config.para_limit, config.ques_limit).data, requires_grad=False)
 
     def forward(self, C, Q):
         for i in range(config.para_limit):
