@@ -216,8 +216,9 @@ def dev(config):
     from models import EncoderBlock
     encoder = EncoderBlock(4, config.connector_dim, 7)
     encoder.to(device)
-    print(encoder.pos.freqs.device)
-    print(encoder.pos.phases.device)
+    print(device)
+    print(encoder.pos.para_pos_encoding.device)
+    print(encoder.pos.ques_pos_encoding.device)
 
 def main(_):
     if config.mode == "train":

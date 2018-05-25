@@ -16,9 +16,6 @@ d_k = conn_dim // num_head
 d_v = conn_dim // num_head
 cq_att_size = conn_dim * 4
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-cpu = torch.device("cpu")
-
 
 def norm(x, eps=1e-6):
     mean = x.mean(-1, keepdim=True)
@@ -29,17 +26,22 @@ def norm(x, eps=1e-6):
 class PosEncoder(nn.Module):
     def __init__(self):
         super().__init__()
-        self.freqs = torch.Tensor([10000 ** (-i / conn_dim) if i % 2 == 0 else -10000 ** (-(i - 1) / conn_dim) for i in
+        freqs = torch.Tensor([10000 ** (-i / conn_dim) if i % 2 == 0 else -10000 ** (-(i - 1) / conn_dim) for i in
                                    range(conn_dim)]).unsqueeze(dim=1)
-        self.phases = torch.Tensor([0 if i % 2 == 0 else math.pi / 2 for i in range(conn_dim)]).unsqueeze(dim=1)
+        phases = torch.Tensor([0 if i % 2 == 0 else math.pi / 2 for i in range(conn_dim)]).unsqueeze(dim=1)
+        para_pos = torch.arange(config.para_limit).repeat(conn_dim, 1)
+        ques_pos = torch.arange(config.ques_limit).repeat(conn_dim, 1)
+        self.para_pos_encoding = torch.sin(torch.add(torch.mul(para_pos, freqs), phases))
+        self.ques_pos_encoding = torch.sin(torch.add(torch.mul(ques_pos, freqs), phases))
 
     def forward(self, x):
-        (_, d, l) = x.size()
-        pos = torch.arange(l).repeat(d, 1).to(device)
-        tmp1 = torch.mul(pos, self.freqs)
-        tmp2 = torch.add(tmp1, self.phases)
-        pos_enc = torch.sin(tmp2)
-        out = torch.sin(pos_enc) + x
+        (_, _, l) = x.size()
+        if l == config.para_limit:
+            out = self.para_pos_encoding + x
+        elif l == config.ques_limit:
+            out = self.ques_pos_encoding + x
+        else:
+            raise ValueError("Wrong data length. Neither {} nor {}".format(config.para_limit, config.ques_limit))
         return out
 
 
@@ -58,7 +60,6 @@ class CharEmbedding(nn.Module):
         self.out_size = self.hidden_size * self.num_layers * self.dir
 
     def forward(self, input):
-        (l, b, in_size) = input.size()
         o, h = self.gru(input, self.h)
         h = h.view(-1)
         return h
@@ -114,7 +115,6 @@ class SelfAttention(nn.Module):
             nn.init.xavier_normal_(self.Wvs[i])
 
     def forward(self, x: torch.Tensor):
-        assert x.size()[1] == conn_dim
         WQs, WKs, WVs = [], [], []
         for i in range(num_head):
             WQs.append(torch.bmm(self.Wqs[i], x))
@@ -144,7 +144,6 @@ class Embedding(nn.Module):
         self.high = Highway(2)
 
     def forward(self, ch_emb, wd_emb):
-        (N, L, cn, sz) = ch_emb.size()
         ch_emb = ch_emb.permute(0, 3, 1, 2)
         ch_emb = self.drop_c(ch_emb)
         ch_emb = self.conv2d(ch_emb)
@@ -198,19 +197,17 @@ class CQAttention(nn.Module):
         super().__init__()
         self.W = torch.empty(batch_size, 1, conn_dim * 3, device=device, requires_grad=True)
         nn.init.xavier_normal_(self.W)
+        self.S = torch.zeros(batch_size, config.para_limit, config.ques_limit)
 
     def forward(self, C, Q):
-        (_, _, n) = C.size()
-        (_, _, m) = Q.size()
-        S = torch.zeros(batch_size, n, m, device=device)
-        for i in range(n):
-            for j in range(m):
+        for i in range(config.para_limit):
+            for j in range(config.ques_limit):
                 c = C[:, :, i]
                 q = Q[:, :, j]
                 v = torch.cat([q, c, torch.mul(q, c)], dim=1).unsqueeze(dim=2)
-                S[:, i, j] = torch.bmm(self.W, v).squeeze()
-        S_ = F.softmax(S, dim=2)
-        S__ = F.softmax(S, dim=1)
+                self.S[:, i, j] = torch.bmm(self.W, v).squeeze()
+        S_ = F.softmax(self.S, dim=2)
+        S__ = F.softmax(self.S, dim=1)
         A = torch.bmm(Q, S_.transpose(1, 2))
         B = torch.bmm(C, torch.bmm(S_, S__.transpose(1, 2)).transpose(1, 2))
         out = torch.cat([C, A, torch.mul(C, A), torch.mul(C, B)], dim=1)
