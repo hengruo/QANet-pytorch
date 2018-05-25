@@ -17,8 +17,6 @@ import torch.cuda
 import torch.backends.cudnn as cudnn
 from torch.utils.data import Dataset, DataLoader
 
-
-
 class SQuADDataset(Dataset):
     def __init__(self, npz_file, num_steps, batch_size):
         data = np.load(npz_file)
@@ -132,7 +130,8 @@ def evaluate_batch(model, eval_file, dataset):
     num_batches = len(dataset)
     for i in tqdm(range(num_batches), total=num_batches):
         (Cwid, Ccid, Qwid, Qcid, y1, y2, ids) = dataset[i]
-        p1, p2 = model(Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device))
+        Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
+        p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
         y1, y2 = y1.to(device), y2.to(device)
         loss1 = F.cross_entropy(p1, y1)
         loss2 = F.cross_entropy(p2, y1)
@@ -179,7 +178,8 @@ def train(config):
 
     for ep in tqdm(range(config.num_steps), total=config.num_steps):
         (Cwid, Ccid, Qwid, Qcid, y1, y2, ids) = train_dataset[ep]
-        p1, p2 = model(Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device))
+        Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
+        p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
         y1, y2 = y1.to(device), y2.to(device)
         loss1 = F.cross_entropy(p1, y1)
         loss2 = F.cross_entropy(p2, y1)
@@ -187,8 +187,9 @@ def train(config):
         loss.backward()
         scheduler.step()
         model.zero_grad()
-        torch.cuda.empty_cache()
         if ep % config.checkpoint == 0:
+            del Cwid, Ccid, Qwid, Qcid, y1, y2, p1, p2, loss
+            torch.cuda.empty_cache()
             metric = evaluate_batch(model, dev_eval_file, dev_dataset)
             log_ = "EPOCH {:8d} loss {:8f} F1 {:8f} EM {:8f}\n".format(ep, metric["loss"], metric["f1"],
                                                                        metric["exact_match"])
