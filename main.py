@@ -184,7 +184,7 @@ def train(config):
         loss1 = F.cross_entropy(p1, y1)
         loss2 = F.cross_entropy(p2, y1)
         loss = loss1 + loss2
-        loss.backward()
+        loss.backward(retain_variables=True)
         scheduler.step()
         model.zero_grad()
         if ep % config.checkpoint == 0:
