@@ -6,8 +6,8 @@ from config import config, device, cpu
 
 D = config.connector_dim
 Nh = config.num_heads
-word_dim = config.glove_dim
-char_dim = config.char_dim
+Dword = config.glove_dim
+Dchar = config.char_dim
 batch_size = config.batch_size
 dropout = config.dropout
 dropout_char = config.dropout_char
@@ -107,9 +107,9 @@ class Embedding(nn.Module):
     def __init__(self):
         super().__init__()
         self.drop_c = nn.Dropout(p=dropout_char)
-        self.conv2d = DepthwiseSeparableConv(char_dim, D, 5, dim=2, bias=True)
+        self.conv2d = DepthwiseSeparableConv(Dchar, D, 5, dim=2, bias=True)
         self.relu = nn.ReLU()
-        self.conv1d = DepthwiseSeparableConv(word_dim + D, D, 5, bias=True)
+        self.conv1d = DepthwiseSeparableConv(Dword + D, D, 5, bias=True)
         self.drop_w = nn.Dropout(p=dropout)
         self.high = Highway(2)
 
