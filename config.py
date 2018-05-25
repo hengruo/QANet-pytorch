@@ -9,7 +9,7 @@ home = os.path.expanduser(".")
 train_file = os.path.join(home, "data", "squad", "train-v1.1.json")
 dev_file = os.path.join(home, "data", "squad", "dev-v1.1.json")
 test_file = os.path.join(home, "data", "squad", "dev-v1.1.json")
-glove_word_file = os.path.join(home, "data", "glove", "glove.840B.300d.txt")
+glove_word_file = os.path.join(home, "data", "glove", "glove.6B.100d.txt")
 
 target_dir = "data"
 event_dir = "log"
@@ -63,10 +63,10 @@ flags.DEFINE_string("char2idx_file", char2idx_file, "")
 flags.DEFINE_string("answer_file", answer_file, "")
 
 
-flags.DEFINE_integer("glove_char_size", 94, "Corpus size for Glove")
-flags.DEFINE_integer("glove_word_size", int(2.2e6), "Corpus size for Glove")
-flags.DEFINE_integer("glove_dim", 300, "Embedding dimension for Glove")
-flags.DEFINE_integer("char_dim", 200, "Embedding dimension for char")
+# flags.DEFINE_integer("glove_char_size", 94, "Corpus size for Glove")
+# flags.DEFINE_integer("glove_word_size", int(2.2e6), "Corpus size for Glove")
+flags.DEFINE_integer("glove_dim", 100, "Embedding dimension for Glove")
+flags.DEFINE_integer("char_dim", 64, "Embedding dimension for char")
 
 flags.DEFINE_integer("para_limit", 400, "Limit length for paragraph")
 flags.DEFINE_integer("ques_limit", 50, "Limit length for question")
