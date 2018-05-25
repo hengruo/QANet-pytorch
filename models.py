@@ -27,12 +27,12 @@ class PosEncoder(nn.Module):
     def __init__(self):
         super().__init__()
         freqs = torch.Tensor([10000 ** (-i / conn_dim) if i % 2 == 0 else -10000 ** (-(i - 1) / conn_dim) for i in
-                                   range(conn_dim)]).unsqueeze(dim=1)
+                              range(conn_dim)]).unsqueeze(dim=1)
         phases = torch.Tensor([0 if i % 2 == 0 else math.pi / 2 for i in range(conn_dim)]).unsqueeze(dim=1)
         para_pos = torch.arange(config.para_limit).repeat(conn_dim, 1)
         ques_pos = torch.arange(config.ques_limit).repeat(conn_dim, 1)
-        self.para_pos_encoding = torch.sin(torch.add(torch.mul(para_pos, freqs), phases)).to(device)
-        self.ques_pos_encoding = torch.sin(torch.add(torch.mul(ques_pos, freqs), phases)).to(device)
+        self.para_pos_encoding = nn.Parameter(torch.sin(torch.add(torch.mul(para_pos, freqs), phases)).data)
+        self.ques_pos_encoding = nn.Parameter(torch.sin(torch.add(torch.mul(ques_pos, freqs), phases)).data)
 
     def forward(self, x):
         (_, _, l) = x.size()
@@ -104,15 +104,19 @@ class Highway(nn.Module):
 class SelfAttention(nn.Module):
     def __init__(self):
         super().__init__()
-        self.Wqs = [torch.empty(batch_size, d_k, conn_dim, device=device, requires_grad=True) for _ in range(num_head)]
-        self.Wks = [torch.empty(batch_size, d_k, conn_dim, device=device, requires_grad=True) for _ in range(num_head)]
-        self.Wvs = [torch.empty(batch_size, d_v, conn_dim, device=device, requires_grad=True) for _ in range(num_head)]
-        self.Wo = torch.empty(batch_size, d_v * num_head, conn_dim, device=device, requires_grad=True)
+        Wo = torch.empty(batch_size, d_v * num_head, conn_dim)
+        Wqs = [torch.empty(batch_size, d_k, conn_dim) for _ in range(num_head)]
+        Wks = [torch.empty(batch_size, d_k, conn_dim) for _ in range(num_head)]
+        Wvs = [torch.empty(batch_size, d_v, conn_dim) for _ in range(num_head)]
         nn.init.xavier_normal_(self.Wo)
         for i in range(num_head):
             nn.init.xavier_normal_(self.Wqs[i])
             nn.init.xavier_normal_(self.Wks[i])
             nn.init.xavier_normal_(self.Wvs[i])
+        self.Wo = nn.Parameter(Wo.data)
+        self.Wqs = nn.ParameterList([X.data for X in Wqs])
+        self.Wks = nn.ParameterList([X.data for X in Wks])
+        self.Wvs = nn.ParameterList([X.data for X in Wvs])
 
     def forward(self, x: torch.Tensor):
         WQs, WKs, WVs = [], [], []
@@ -163,8 +167,9 @@ class EncoderBlock(nn.Module):
         super().__init__()
         self.convs = nn.ModuleList([DepthwiseSeparableConv(ch_num, ch_num, k) for _ in range(conv_num)])
         self.self_att = SelfAttention()
-        self.W = torch.empty(batch_size, ch_num, ch_num, device=device, requires_grad=True)
-        nn.init.xavier_normal_(self.W)
+        W = torch.empty(batch_size, ch_num, ch_num)
+        nn.init.xavier_normal_(W)
+        self.W = nn.Parameter(W.data)
         self.pos = PosEncoder()
         self.relu = nn.ReLU()
 
@@ -195,9 +200,10 @@ class EncoderBlock(nn.Module):
 class CQAttention(nn.Module):
     def __init__(self):
         super().__init__()
-        self.W = torch.empty(batch_size, 1, conn_dim * 3, device=device, requires_grad=True)
-        nn.init.xavier_normal_(self.W)
-        self.S = torch.zeros(batch_size, config.para_limit, config.ques_limit, device=device)
+        W = torch.empty(batch_size, 1, conn_dim * 3)
+        nn.init.xavier_normal_(W)
+        self.W = nn.Parameter(W.data)
+        self.S = nn.Parameter(torch.zeros(batch_size, config.para_limit, config.ques_limit).data)
 
     def forward(self, C, Q):
         for i in range(config.para_limit):
@@ -218,19 +224,21 @@ class CQAttention(nn.Module):
 class Pointer(nn.Module):
     def __init__(self):
         super().__init__()
-        self.W0 = torch.empty(batch_size, 1, conn_dim * 2, device=device, requires_grad=True)
-        self.W1 = torch.empty(batch_size, 1, conn_dim * 2, device=device, requires_grad=True)
-        nn.init.xavier_normal_(self.W0)
-        nn.init.xavier_normal_(self.W1)
+        W1 = torch.empty(batch_size, 1, conn_dim * 2)
+        W2 = torch.empty(batch_size, 1, conn_dim * 2)
+        nn.init.xavier_normal_(W1)
+        nn.init.xavier_normal_(W2)
+        self.W1 = nn.Parameter(W1.data)
+        self.W2 = nn.Parameter(W2.data)
 
-    def forward(self, M0, M1, M2):
-        X0 = torch.cat([M0, M1], dim=1)
-        X1 = torch.cat([M0, M2], dim=1)
-        Y0 = torch.bmm(self.W0, X0).squeeze()
+    def forward(self, M1, M2, M3):
+        X1 = torch.cat([M1, M2], dim=1)
+        X2 = torch.cat([M1, M3], dim=1)
         Y1 = torch.bmm(self.W1, X1).squeeze()
-        p0 = F.log_softmax(Y0, dim=1)
+        Y2 = torch.bmm(self.W2, X2).squeeze()
         p1 = F.log_softmax(Y1, dim=1)
-        return p0, p1
+        p2 = F.log_softmax(Y2, dim=1)
+        return p1, p2
 
 
 class QANet(nn.Module):
@@ -249,10 +257,6 @@ class QANet(nn.Module):
         self.model_enc_blk2 = EncoderBlock(conv_num=2, ch_num=conn_dim, k=5)
         self.out = Pointer()
 
-    def move(self, device):
-        self.to(device)
-
-
     def forward(self, Cwid, Ccid, Qwid, Qcid):
         Cw, Cc = self.word_emb(Cwid), self.char_emb(Ccid)
         Qw, Qc = self.word_emb(Qwid), self.char_emb(Qcid)
@@ -261,15 +265,15 @@ class QANet(nn.Module):
         Q = self.q_emb_enc(Q)
         X = self.cq_att(C, Q)
         X = self.cq_resizer(X)
-        M0 = X
+        M1 = X
         for i in range(7):
-            M0 = self.model_enc_blk0(M0)
-        M1 = M0
-        for i in range(7):
-            M1 = self.model_enc_blk1(M1)
+            M1 = self.model_enc_blk0(M1)
         M2 = M1
         for i in range(7):
-            M2 = self.model_enc_blk2(M2)
-        p1, p2 = self.out(M0, M1, M2)
+            M2 = self.model_enc_blk1(M2)
+        M3 = M2
+        for i in range(7):
+            M3 = self.model_enc_blk2(M3)
+        p1, p2 = self.out(M1, M2, M3)
         p1, p2 = torch.exp(p1), torch.exp(p2)
         return p1, p2
