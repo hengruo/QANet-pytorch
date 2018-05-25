@@ -219,7 +219,7 @@ def dev(config):
     print(device)
     print(encoder.pos.para_pos_encoding.device)
     print(encoder.pos.ques_pos_encoding.device)
-    char = CharEmbedding()
+    char = CharEmbedding().to(device)
     print(char.h.device)
 
 def main(_):
