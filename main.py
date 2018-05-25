@@ -130,10 +130,10 @@ def evaluate_batch(model, eval_file, dataset):
     answer_dict = {}
     losses = []
     num_batches = len(dataset)
-    model = model.to(cpu)
     for i in tqdm(range(num_batches), total=num_batches):
         (Cwid, Ccid, Qwid, Qcid, y1, y2, ids) = dataset[i]
-        p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
+        p1, p2 = model(Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device))
+        y1, y2 = y1.to(device), y2.to(device)
         loss1 = F.cross_entropy(p1, y1)
         loss2 = F.cross_entropy(p2, y1)
         loss = loss1 + loss2
