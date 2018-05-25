@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from config import config
+from config import config, device, cpu
 
 conn_dim = config.connector_dim
 num_head = config.num_heads

@@ -1,5 +1,6 @@
 import os
 import absl.flags as flags
+import torch
 
 '''
 The content of this file is mostly copied from https://github.com/HKUST-KnowComp/R-Net/blob/master/config.py
@@ -110,3 +111,6 @@ flags.DEFINE_string("fasttext_file", fasttext_file, "Fasttext word embedding")
 flags.DEFINE_boolean("fasttext", False, "Whether to use fasttext")
 
 config = flags.FLAGS
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+cpu = torch.device("cpu")

@@ -1,4 +1,4 @@
-from config import config
+from config import config, device, cpu
 from preproc import preproc
 from absl import app
 import math
@@ -17,8 +17,7 @@ import torch.cuda
 import torch.backends.cudnn as cudnn
 from torch.utils.data import Dataset, DataLoader
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-cpu = torch.device("cpu")
+
 
 class SQuADDataset(Dataset):
     def __init__(self, npz_file, num_steps, batch_size):
