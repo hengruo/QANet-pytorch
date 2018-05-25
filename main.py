@@ -131,7 +131,7 @@ def evaluate_batch(model, eval_file, dataset):
     losses = []
     num_batches = len(dataset)
     model = model.to(cpu)
-    for i in tqdm(range(num_batches)):
+    for i in tqdm(range(num_batches), total=num_batches):
         (Cwid, Ccid, Qwid, Qcid, y1, y2, ids) = dataset[i]
         p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
         loss1 = F.cross_entropy(p1, y1)
@@ -177,7 +177,7 @@ def train(config):
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda ee: crit * math.log2(
         ee + 1) if ee + 1 <= 1000 else lr)
 
-    for ep in tqdm(range(config.num_steps)):
+    for ep in tqdm(range(config.num_steps), total=config.num_steps):
         (Cwid, Ccid, Qwid, Qcid, y1, y2, ids) = train_dataset[ep]
         p1, p2 = model(Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device))
         y1, y2 = y1.to(device), y2.to(device)
