@@ -184,10 +184,10 @@ def train(config):
         loss1 = F.cross_entropy(p1, y1)
         loss2 = F.cross_entropy(p2, y1)
         loss = loss1 + loss2
-        loss.backward()
+        loss.backward(retain_graph=True)
         scheduler.step()
         model.zero_grad()
-        if ep % config.checkpoint == 0:
+        if ep % config.checkpoint == 100:
             del Cwid, Ccid, Qwid, Qcid, y1, y2, p1, p2, loss
             torch.cuda.empty_cache()
             metric = evaluate_batch(model, dev_eval_file, dev_dataset)
