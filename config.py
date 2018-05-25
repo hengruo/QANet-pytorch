@@ -63,8 +63,8 @@ flags.DEFINE_string("char2idx_file", char2idx_file, "")
 flags.DEFINE_string("answer_file", answer_file, "")
 
 
-# flags.DEFINE_integer("glove_char_size", 94, "Corpus size for Glove")
-# flags.DEFINE_integer("glove_word_size", int(2.2e6), "Corpus size for Glove")
+flags.DEFINE_integer("glove_char_size", 94, "Corpus size for Glove")
+flags.DEFINE_integer("glove_word_size", int(2.2e6), "Corpus size for Glove")
 flags.DEFINE_integer("glove_dim", 100, "Embedding dimension for Glove")
 flags.DEFINE_integer("char_dim", 64, "Embedding dimension for char")
 

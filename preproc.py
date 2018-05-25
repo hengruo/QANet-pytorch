@@ -84,15 +84,14 @@ def process_file(filename, data_type, word_counter, char_counter):
     return examples, eval_examples
 
 
-def get_embedding(counter, data_type, limit=-1, emb_file=None, size=None, vec_size=None):
+def get_embedding(counter, data_type, limit=-1, emb_file=None, vec_size=None):
     print("Generating {} embedding...".format(data_type))
     embedding_dict = {}
     filtered_elements = [k for k, v in counter.items() if v > limit]
     if emb_file is not None:
-        assert size is not None
         assert vec_size is not None
         with open(emb_file, "r", encoding="utf-8") as fh:
-            for line in tqdm(fh, total=size):
+            for line in tqdm(fh):
                 array = line.split()
                 word = "".join(array[0:-vec_size])
                 vector = list(map(float, array[-vec_size:]))
@@ -276,9 +275,9 @@ def preproc(config):
     char_emb_dim = config.glove_dim if config.pretrained_char else config.char_dim
 
     word_emb_mat, word2idx_dict = get_embedding(
-        word_counter, "word", emb_file=word_emb_file, size=config.glove_word_size, vec_size=config.glove_dim)
+        word_counter, "word", emb_file=word_emb_file, vec_size=config.glove_dim)
     char_emb_mat, char2idx_dict = get_embedding(
-        char_counter, "char", emb_file=char_emb_file, size=char_emb_size, vec_size=char_emb_dim)
+        char_counter, "char", emb_file=char_emb_file, vec_size=char_emb_dim)
 
     build_features(config, train_examples, "train",
                    config.train_record_file, word2idx_dict, char2idx_dict)
