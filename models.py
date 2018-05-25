@@ -31,8 +31,8 @@ class PosEncoder(nn.Module):
         phases = torch.Tensor([0 if i % 2 == 0 else math.pi / 2 for i in range(conn_dim)]).unsqueeze(dim=1)
         para_pos = torch.arange(config.para_limit).repeat(conn_dim, 1)
         ques_pos = torch.arange(config.ques_limit).repeat(conn_dim, 1)
-        self.para_pos_encoding = torch.sin(torch.add(torch.mul(para_pos, freqs), phases))
-        self.ques_pos_encoding = torch.sin(torch.add(torch.mul(ques_pos, freqs), phases))
+        self.para_pos_encoding = torch.sin(torch.add(torch.mul(para_pos, freqs), phases)).to(device)
+        self.ques_pos_encoding = torch.sin(torch.add(torch.mul(ques_pos, freqs), phases)).to(device)
 
     def forward(self, x):
         (_, _, l) = x.size()
@@ -197,7 +197,7 @@ class CQAttention(nn.Module):
         super().__init__()
         self.W = torch.empty(batch_size, 1, conn_dim * 3, device=device, requires_grad=True)
         nn.init.xavier_normal_(self.W)
-        self.S = torch.zeros(batch_size, config.para_limit, config.ques_limit)
+        self.S = torch.zeros(batch_size, config.para_limit, config.ques_limit, device=device)
 
     def forward(self, C, Q):
         for i in range(config.para_limit):
@@ -266,6 +266,6 @@ class QANet(nn.Module):
         M2 = M1
         for i in range(7):
             M2 = self.model_enc_blk2(M2)
-        p1, p2 = self.out(M0.to(device), M1.to(device), M2)
+        p1, p2 = self.out(M0, M1, M2)
         p1, p2 = torch.exp(p1), torch.exp(p2)
         return p1, p2
