@@ -186,6 +186,7 @@ def train(config):
         loss = loss1 + loss2
         loss.backward()
         scheduler.step()
+        model.zero_grad()
         torch.cuda.empty_cache()
         if ep % config.checkpoint == 0:
             metric = evaluate_batch(model, dev_eval_file, dev_dataset)
@@ -211,6 +212,12 @@ def train(config):
 def test(config):
     pass
 
+def dev(config):
+    from models import EncoderBlock
+    encoder = EncoderBlock(4, config.connector_dim, 7)
+    encoder.to(device)
+    print(encoder.pos.freqs.device)
+    print(encoder.pos.phases.device)
 
 def main(_):
     if config.mode == "train":
@@ -225,6 +232,8 @@ def main(_):
         train(config)
     elif config.mode == "test":
         test(config)
+    elif config.mode == "dev":
+        dev(config)
     else:
         print("Unknown mode")
         exit(0)

@@ -272,20 +272,3 @@ class QANet(nn.Module):
         p1, p2 = self.out(M0.to(device), M1.to(device), M2)
         p1, p2 = torch.exp(p1), torch.exp(p2)
         return p1, p2
-
-
-if __name__ == "__main__":
-    import dataset
-
-    squad = dataset.SQuAD.load("data/")
-    model = QANet(squad)
-    import random
-
-    wl = list(range(1200))
-    cl = list(range(50))
-    Cw = torch.LongTensor(random.sample(wl, 150)).repeat(batch_size, 1)
-    Cc = torch.LongTensor(random.sample(cl, 16)).repeat(batch_size, 150, 1)
-    Qw = torch.LongTensor(random.sample(wl, 15)).repeat(batch_size, 1)
-    Qc = torch.LongTensor(random.sample(cl, 16)).repeat(batch_size, 15, 1)
-
-    p0, p1 = model(Cw, Cc, Qw, Qc)
