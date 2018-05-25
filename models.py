@@ -19,11 +19,6 @@ cq_att_size = conn_dim * 4
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 cpu = torch.device("cpu")
 
-freqs = torch.Tensor(
-    [10000 ** (-i / conn_dim) if i % 2 == 0 else -10000 ** (-(i - 1) / conn_dim) for i in range(conn_dim)]).unsqueeze(
-    dim=1).to(device)
-phases = torch.Tensor([0 if i % 2 == 0 else math.pi / 2 for i in range(conn_dim)]).unsqueeze(dim=1).to(device)
-
 
 def norm(x, eps=1e-6):
     mean = x.mean(-1, keepdim=True)
@@ -31,14 +26,21 @@ def norm(x, eps=1e-6):
     return (x - mean) / (std + eps)
 
 
-def pos_encoding(x):
-    (_, d, l) = x.size()
-    pos = torch.arange(l).repeat(d, 1).to(device)
-    tmp1 = torch.mul(pos, freqs)
-    tmp2 = torch.add(tmp1, phases)
-    pos_enc = torch.sin(tmp2)
-    out = torch.sin(pos_enc) + x
-    return out
+class PosEncoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.freqs = torch.Tensor([10000 ** (-i / conn_dim) if i % 2 == 0 else -10000 ** (-(i - 1) / conn_dim) for i in
+                                   range(conn_dim)]).unsqueeze(dim=1)
+        self.phases = torch.Tensor([0 if i % 2 == 0 else math.pi / 2 for i in range(conn_dim)]).unsqueeze(dim=1)
+
+    def forward(self, x):
+        (_, d, l) = x.size()
+        pos = torch.arange(l).repeat(d, 1).to(device)
+        tmp1 = torch.mul(pos, self.freqs)
+        tmp2 = torch.add(tmp1, self.phases)
+        pos_enc = torch.sin(tmp2)
+        out = torch.sin(pos_enc) + x
+        return out
 
 
 # Using bidirectional gru hidden state to represent char embedding for a word
@@ -164,10 +166,11 @@ class EncoderBlock(nn.Module):
         self.self_att = SelfAttention()
         self.W = torch.empty(batch_size, ch_num, ch_num, device=device, requires_grad=True)
         nn.init.xavier_normal_(self.W)
+        self.pos = PosEncoder()
         self.relu = nn.ReLU()
 
     def forward(self, x):
-        out = pos_encoding(x)
+        out = self.pos(x)
         res = out
         for i, conv in enumerate(self.convs):
             out = norm(out)
