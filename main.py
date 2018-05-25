@@ -136,7 +136,7 @@ def evaluate_batch(model, eval_file, dataset):
         loss1 = F.cross_entropy(p1, y1)
         loss2 = F.cross_entropy(p2, y1)
         loss = loss1 + loss2
-        losses.append(loss.data)
+        losses.append(float(loss.data))
         answer_dict_, _ = convert_tokens(
             eval_file, ids.tolist(), y1.tolist(), y2.tolist())
         answer_dict.update(answer_dict_)
