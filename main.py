@@ -215,12 +215,9 @@ def test(config):
 def dev(config):
     from models import EncoderBlock, CharEmbedding
     encoder = EncoderBlock(4, config.connector_dim, 7)
+    print(encoder.device)
     encoder.to(device)
-    print(device)
-    print(encoder.pos.para_pos_encoding.device)
-    print(encoder.pos.ques_pos_encoding.device)
-    char = CharEmbedding().to(device)
-    print(char.h.device)
+    print(encoder.device)
 
 def main(_):
     if config.mode == "train":

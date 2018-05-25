@@ -249,6 +249,10 @@ class QANet(nn.Module):
         self.model_enc_blk2 = EncoderBlock(conv_num=2, ch_num=conn_dim, k=5)
         self.out = Pointer()
 
+    def move(self, device):
+        self.to(device)
+
+
     def forward(self, Cwid, Ccid, Qwid, Qcid):
         Cw, Cc = self.word_emb(Cwid), self.char_emb(Ccid)
         Qw, Qc = self.word_emb(Qwid), self.char_emb(Qcid)
