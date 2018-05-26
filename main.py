@@ -14,8 +14,8 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.cuda
-import torch.backends.cudnn as cudnn
 from torch.utils.data import Dataset, DataLoader
+
 
 class SQuADDataset(Dataset):
     def __init__(self, npz_file, num_steps, batch_size):
@@ -187,7 +187,7 @@ def train(config):
         loss.backward(retain_graph=True)
         scheduler.step()
         model.zero_grad()
-        if ep % config.checkpoint == 0:
+        if (ep + 1) % config.checkpoint == 0:
             del Cwid, Ccid, Qwid, Qcid, y1, y2, p1, p2, loss
             torch.cuda.empty_cache()
             metric = evaluate_batch(model, dev_eval_file, dev_dataset)
@@ -213,10 +213,12 @@ def train(config):
 def test(config):
     pass
 
+
 def dev(config):
     from models import EncoderBlock
     encoder = EncoderBlock(4, config.connector_dim, 7)
     print(encoder._parameters)
+
 
 def main(_):
     if config.mode == "train":

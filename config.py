@@ -1,6 +1,7 @@
 import os
 import absl.flags as flags
 import torch
+import torch.backends.cudnn as cudnn
 
 '''
 The content of this file is mostly copied from https://github.com/HKUST-KnowComp/R-Net/blob/master/config.py
@@ -114,3 +115,5 @@ config = flags.FLAGS
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 cpu = torch.device("cpu")
+
+cudnn.enabled = False
