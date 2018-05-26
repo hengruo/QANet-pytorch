@@ -1,4 +1,4 @@
-from config import config
+from config import config, device, cpu
 from preproc import preproc
 from absl import app
 import math
@@ -14,10 +14,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.cuda
-import torch.backends.cudnn as cudnn
 from torch.utils.data import Dataset, DataLoader
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class SQuADDataset(Dataset):
@@ -131,14 +128,15 @@ def evaluate_batch(model, eval_file, dataset):
     answer_dict = {}
     losses = []
     num_batches = len(dataset)
-    for i in tqdm(range(num_batches)):
+    for i in tqdm(range(num_batches), total=num_batches):
         (Cwid, Ccid, Qwid, Qcid, y1, y2, ids) = dataset[i]
-        p1, p2 = model(Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device))
+        Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
+        p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
         y1, y2 = y1.to(device), y2.to(device)
         loss1 = F.cross_entropy(p1, y1)
         loss2 = F.cross_entropy(p2, y1)
         loss = loss1 + loss2
-        losses.append(loss)
+        losses.append(float(loss.data))
         answer_dict_, _ = convert_tokens(
             eval_file, ids.tolist(), y1.tolist(), y2.tolist())
         answer_dict.update(answer_dict_)
@@ -178,17 +176,20 @@ def train(config):
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda ee: crit * math.log2(
         ee + 1) if ee + 1 <= 1000 else lr)
 
-    for ep in tqdm(range(config.num_steps)):
+    for ep in tqdm(range(config.num_steps), total=config.num_steps):
         (Cwid, Ccid, Qwid, Qcid, y1, y2, ids) = train_dataset[ep]
-        p1, p2 = model(Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device))
+        Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
+        p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
         y1, y2 = y1.to(device), y2.to(device)
         loss1 = F.cross_entropy(p1, y1)
         loss2 = F.cross_entropy(p2, y1)
         loss = loss1 + loss2
-        loss.backward()
+        loss.backward(retain_graph=True)
         scheduler.step()
-        torch.cuda.empty_cache()
-        if ep % config.checkpoint == 0:
+        model.zero_grad()
+        if (ep + 1) % config.checkpoint == 0:
+            del Cwid, Ccid, Qwid, Qcid, y1, y2, p1, p2, loss
+            torch.cuda.empty_cache()
             metric = evaluate_batch(model, dev_eval_file, dev_dataset)
             log_ = "EPOCH {:8d} loss {:8f} F1 {:8f} EM {:8f}\n".format(ep, metric["loss"], metric["f1"],
                                                                        metric["exact_match"])
@@ -213,6 +214,12 @@ def test(config):
     pass
 
 
+def dev(config):
+    from models import EncoderBlock
+    encoder = EncoderBlock(4, config.connector_dim, 7)
+    print(encoder._parameters)
+
+
 def main(_):
     if config.mode == "train":
         train(config)
@@ -226,6 +233,8 @@ def main(_):
         train(config)
     elif config.mode == "test":
         test(config)
+    elif config.mode == "dev":
+        dev(config)
     else:
         print("Unknown mode")
         exit(0)
