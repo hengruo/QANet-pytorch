@@ -134,9 +134,10 @@ def evaluate_batch(model, eval_file, dataset):
         p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
         y1, y2 = y1.to(device), y2.to(device)
         loss1 = F.cross_entropy(p1, y1)
-        loss2 = F.cross_entropy(p2, y1)
+        loss2 = F.cross_entropy(p2, y2)
         loss = loss1 + loss2
-        losses.append(float(loss.data))
+        losses.append(loss.item())
+        del loss, p1, p2
         answer_dict_, _ = convert_tokens(
             eval_file, ids.tolist(), y1.tolist(), y2.tolist())
         answer_dict.update(answer_dict_)
@@ -170,6 +171,7 @@ def train(config):
     lr = config.learning_rate
 
     model = QANet(word_mat, char_mat).to(device)
+    model.train()
     parameters = filter(lambda param: param.requires_grad, model.parameters())
     optimizer = optim.Adam(betas=(0.8, 0.999), eps=1e-7, weight_decay=3e-7, params=parameters)
     crit = lr / math.log2(1000)
@@ -182,12 +184,12 @@ def train(config):
         p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
         y1, y2 = y1.to(device), y2.to(device)
         loss1 = F.cross_entropy(p1, y1)
-        loss2 = F.cross_entropy(p2, y1)
+        loss2 = F.cross_entropy(p2, y2)
         loss = loss1 + loss2
-        loss.backward(retain_graph=True)
+        loss.backward()
         scheduler.step()
         model.zero_grad()
-        if (ep + 1) % config.checkpoint == 0:
+        if (ep + 1) % config.checkpoint == 1:
             del Cwid, Ccid, Qwid, Qcid, y1, y2, p1, p2, loss
             torch.cuda.empty_cache()
             metric = evaluate_batch(model, dev_eval_file, dev_dataset)

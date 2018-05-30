@@ -116,4 +116,4 @@ config = flags.FLAGS
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 cpu = torch.device("cpu")
 
-cudnn.enabled = False
+cudnn.enabled = True
