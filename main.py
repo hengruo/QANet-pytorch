@@ -15,8 +15,6 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.cuda
 from torch.utils.data import Dataset, DataLoader
-from graphviz import Digraph
-from torchviz import make_dot
 
 
 class SQuADDataset(Dataset):
