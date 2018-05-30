@@ -15,6 +15,8 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.cuda
 from torch.utils.data import Dataset, DataLoader
+from graphviz import Digraph
+from torchviz import make_dot
 
 
 class SQuADDataset(Dataset):
@@ -186,7 +188,7 @@ def train(config):
         loss1 = F.cross_entropy(p1, y1)
         loss2 = F.cross_entropy(p2, y2)
         loss = loss1 + loss2
-        loss.backward()
+        loss.backward(retain_graph=True)
         scheduler.step()
         model.zero_grad()
         if (ep + 1) % config.checkpoint == 0:
