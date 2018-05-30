@@ -179,6 +179,7 @@ def train(config):
         ee + 1) if ee + 1 <= 1000 else lr)
 
     for ep in tqdm(range(config.num_steps), total=config.num_steps):
+        model.zero_grad()
         (Cwid, Ccid, Qwid, Qcid, y1, y2, ids) = train_dataset[ep]
         Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
         p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
@@ -188,7 +189,7 @@ def train(config):
         loss = loss1 + loss2
         loss.backward(retain_graph=True)
         scheduler.step()
-        model.zero_grad()
+        del loss, p1, p2
         if (ep + 1) % config.checkpoint == 0:
             del Cwid, Ccid, Qwid, Qcid, y1, y2, p1, p2, loss
             torch.cuda.empty_cache()

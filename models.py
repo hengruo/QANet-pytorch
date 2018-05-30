@@ -233,5 +233,6 @@ class QANet(nn.Module):
         M2 = self.model_enc_blks2(M1)
         M3 = self.model_enc_blks3(M2)
         p1, p2 = self.out(M1, M2, M3)
-        p1, p2 = torch.exp(p1), torch.exp(p2)
+        p1.exp_()
+        p2.exp_()
         return p1, p2
