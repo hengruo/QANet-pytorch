@@ -55,13 +55,12 @@ class Highway(nn.Module):
         self.n = layer_num
         self.linear = nn.ModuleList([nn.Linear(size, size) for _ in range(self.n)])
         self.gate = nn.ModuleList([nn.Linear(size, size) for _ in range(self.n)])
-        self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
         x = x.transpose(1, 2)
         for i in range(self.n):
             gate = F.sigmoid(self.gate[i](x))
-            nonlinear = self.relu(self.linear[i](x))
+            nonlinear = F.relu(self.linear[i](x), inplace=True)
             x = gate * nonlinear + (1 - gate) * x
         x = x.transpose(1, 2)
         return x
@@ -106,21 +105,18 @@ class SelfAttention(nn.Module):
 class Embedding(nn.Module):
     def __init__(self):
         super().__init__()
-        self.drop_c = nn.Dropout(p=dropout_char, inplace=True)
         self.conv2d = DepthwiseSeparableConv(Dchar, D, 5, dim=2, bias=True)
-        self.relu = nn.ReLU(inplace=True)
         self.conv1d = DepthwiseSeparableConv(Dword + D, D, 5, bias=True)
-        self.drop_w = nn.Dropout(p=dropout, inplace=True)
         self.high = Highway(2)
 
     def forward(self, ch_emb, wd_emb):
         ch_emb = ch_emb.permute(0, 3, 1, 2)
-        ch_emb = self.drop_c(ch_emb)
+        ch_emb = F.dropout(ch_emb, p=dropout_char, training=self.training, inplace=True)
         ch_emb = self.conv2d(ch_emb)
-        ch_emb = self.relu(ch_emb)
+        ch_emb = F.relu(ch_emb, inplace=True)
         ch_emb, _ = torch.max(ch_emb, dim=3)
         ch_emb = ch_emb.squeeze()
-        wd_emb = self.drop_w(wd_emb)
+        wd_emb = F.dropout(wd_emb, p=dropout, training=self.training, inplace=True)
         wd_emb = wd_emb.transpose(1, 2)
         emb = torch.cat([ch_emb, wd_emb], dim=1)
         emb = self.conv1d(emb)
@@ -137,8 +133,6 @@ class EncoderBlock(nn.Module):
         nn.init.xavier_normal_(W)
         self.W = nn.Parameter(W.data)
         self.pos = PosEncoder(length)
-        self.relu = nn.ReLU(inplace=True)
-        self.dropout = nn.Dropout(p=dropout, inplace=True)
         self.norm = nn.LayerNorm([D, length])
 
     def forward(self, x):
@@ -147,21 +141,21 @@ class EncoderBlock(nn.Module):
         for i, conv in enumerate(self.convs):
             out = self.norm(out)
             out = conv(out)
-            out = self.relu(out)
+            out = F.relu(out, inplace=True)
             out.add_(res)
             if (i + 1) % 2 == 0:
-                out = self.dropout(out)
+                out = F.dropout(out, p=dropout, training=self.training, inplace=True)
             res = out
             out = self.norm(out)
         out = self.self_att(out)
         out.add_(res)
-        out = self.dropout(out)
+        out = F.dropout(out, p=dropout, training=self.training, inplace=True)
         res = out
         out = self.norm(out)
         out = torch.bmm(self.W, out)
-        out = self.relu(out)
+        out = F.relu(out, inplace=True)
         out.add_(res)
-        out = self.dropout(out)
+        out = F.dropout(out, p=dropout, training=self.training, inplace=True)
         return out
 
 
@@ -172,7 +166,6 @@ class CQAttention(nn.Module):
         nn.init.xavier_normal_(W)
         self.W = nn.Parameter(W.data)
         self.S = nn.Parameter(torch.zeros(batch_size, config.para_limit, config.ques_limit).data, requires_grad=False)
-        self.dropout = nn.Dropout(p=dropout, inplace=True)
 
     def forward(self, C, Q):
         for i in range(config.para_limit):
@@ -186,7 +179,7 @@ class CQAttention(nn.Module):
         A = torch.bmm(Q, S1.transpose(1, 2))
         B = torch.bmm(C, torch.bmm(S1, S2.transpose(1, 2)).transpose(1, 2))
         out = torch.cat([C, A, torch.mul(C, A), torch.mul(C, B)], dim=1)
-        out = self.dropout(out)
+        out = F.dropout(out, p=dropout, training=self.training, inplace=True)
         return out
 
 
