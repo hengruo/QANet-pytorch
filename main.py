@@ -189,7 +189,7 @@ def train(config):
         loss.backward()
         scheduler.step()
         model.zero_grad()
-        if (ep + 1) % config.checkpoint == 1:
+        if (ep + 1) % config.checkpoint == 0:
             del Cwid, Ccid, Qwid, Qcid, y1, y2, p1, p2, loss
             torch.cuda.empty_cache()
             metric = evaluate_batch(model, dev_eval_file, dev_dataset)
