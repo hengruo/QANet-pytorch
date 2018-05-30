@@ -27,8 +27,8 @@ class PosEncoder(nn.Module):
         self.pos_encoding = nn.Parameter(torch.sin(torch.add(torch.mul(pos, freqs), phases)).data)
 
     def forward(self, x):
-        out = self.pos_encoding + x
-        return out
+        x.add_(self.pos_encoding)
+        return x
 
 
 class DepthwiseSeparableConv(nn.Module):
@@ -55,7 +55,7 @@ class Highway(nn.Module):
         self.n = layer_num
         self.linear = nn.ModuleList([nn.Linear(size, size) for _ in range(self.n)])
         self.gate = nn.ModuleList([nn.Linear(size, size) for _ in range(self.n)])
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
         x = x.transpose(1, 2)
@@ -106,11 +106,11 @@ class SelfAttention(nn.Module):
 class Embedding(nn.Module):
     def __init__(self):
         super().__init__()
-        self.drop_c = nn.Dropout(p=dropout_char)
+        self.drop_c = nn.Dropout(p=dropout_char, inplace=True)
         self.conv2d = DepthwiseSeparableConv(Dchar, D, 5, dim=2, bias=True)
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU(inplace=True)
         self.conv1d = DepthwiseSeparableConv(Dword + D, D, 5, bias=True)
-        self.drop_w = nn.Dropout(p=dropout)
+        self.drop_w = nn.Dropout(p=dropout, inplace=True)
         self.high = Highway(2)
 
     def forward(self, ch_emb, wd_emb):
@@ -137,8 +137,8 @@ class EncoderBlock(nn.Module):
         nn.init.xavier_normal_(W)
         self.W = nn.Parameter(W.data)
         self.pos = PosEncoder(length)
-        self.relu = nn.ReLU()
-        self.dropout = nn.Dropout(p=dropout)
+        self.relu = nn.ReLU(inplace=True)
+        self.dropout = nn.Dropout(p=dropout, inplace=True)
         self.norm = nn.LayerNorm([D, length])
 
     def forward(self, x):
@@ -148,19 +148,19 @@ class EncoderBlock(nn.Module):
             out = self.norm(out)
             out = conv(out)
             out = self.relu(out)
-            out = res + out
+            out.add_(res)
             if (i + 1) % 2 == 0:
                 out = self.dropout(out)
             res = out
             out = self.norm(out)
         out = self.self_att(out)
-        out = res + out
+        out.add_(res)
         out = self.dropout(out)
         res = out
         out = self.norm(out)
         out = torch.bmm(self.W, out)
         out = self.relu(out)
-        out = res + out
+        out.add_(res)
         out = self.dropout(out)
         return out
 
@@ -172,7 +172,7 @@ class CQAttention(nn.Module):
         nn.init.xavier_normal_(W)
         self.W = nn.Parameter(W.data)
         self.S = nn.Parameter(torch.zeros(batch_size, config.para_limit, config.ques_limit).data, requires_grad=False)
-        self.dropout = nn.Dropout(p=dropout)
+        self.dropout = nn.Dropout(p=dropout, inplace=True)
 
     def forward(self, C, Q):
         for i in range(config.para_limit):
