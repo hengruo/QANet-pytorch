@@ -230,8 +230,11 @@ class QANet(nn.Module):
         X = self.cq_att(Ce, Qe)
         M0 = self.cq_resizer(X)
         M1 = self.model_enc_blks(M0)
+        M0 = M0.to(cpu)
         M2 = self.model_enc_blks(M1)
+        M1 = M1.to(cpu)
         M3 = self.model_enc_blks(M2)
+        M1 = M1.to(device)
         p1, p2 = self.out(M1, M2, M3)
         p1, p2 = torch.exp(p1), torch.exp(p2)
         return p1, p2
