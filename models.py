@@ -85,20 +85,21 @@ class SelfAttention(nn.Module):
 
     def forward(self, x: torch.Tensor):
         WQs, WKs, WVs = [], [], []
+        sqrt_dk = math.sqrt(Dk)
         for i in range(Nh):
-            WQs.append(torch.bmm(self.Wqs[i], x))
-            WKs.append(torch.bmm(self.Wks[i], x))
-            WVs.append(torch.bmm(self.Wvs[i], x))
+            WQs.append(torch.bmm(self.Wqs[i], x).to(cpu))
+            WKs.append(torch.bmm(self.Wks[i], x).to(cpu))
+            WVs.append(torch.bmm(self.Wvs[i], x).to(cpu))
         heads = []
         for i in range(Nh):
-            out = torch.bmm(WQs[i].transpose(1, 2), WKs[i])
-            out = torch.div(out, math.sqrt(Dk))
+            out = torch.bmm(WQs[i].to(device).transpose(1, 2), WKs[i].to(device))
+            out = torch.div(out, sqrt_dk)
             # not sure... I think `dim` should be 1 since it weighted each column of `WVs[i]`
             out = F.softmax(out, dim=1)
-            headi = torch.bmm(WVs[i], out)
+            headi = torch.bmm(WVs[i].to(device), out).to(cpu)
             heads.append(headi)
         head = torch.cat(heads, dim=1)
-        out = torch.bmm(self.Wo, head)
+        out = torch.bmm(self.Wo, head.to(device))
         return out
 
 
