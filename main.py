@@ -190,6 +190,7 @@ def train(config):
         loss.backward(retain_graph=True)
         scheduler.step()
         del loss, p1, p2
+        torch.cuda.empty_cache()
         if (ep + 1) % config.checkpoint == 0:
             del Cwid, Ccid, Qwid, Qcid, y1, y2, p1, p2, loss
             torch.cuda.empty_cache()
