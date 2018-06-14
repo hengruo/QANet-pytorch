@@ -46,7 +46,7 @@ class SQuADDataset(Dataset):
         return self.num_steps
 
     def __getitem__(self, item):
-        idxs = torch.IntTensor(self.idx_map[item:item + self.batch_size])
+        idxs = torch.LongTensor(self.idx_map[item:item + self.batch_size])
         res = (self.context_idxs[idxs], self.context_char_idxs[idxs], self.ques_idxs[idxs], self.ques_char_idxs[idxs],
                self.y1s[idxs],
                self.y2s[idxs], self.ids[idxs])
