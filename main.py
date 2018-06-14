@@ -161,10 +161,15 @@ def test(model, dataset, eval_file, epoch):
             loss2 = F.cross_entropy(p2, y2)
             loss = loss1 + loss2
             losses.append(loss.item())
-            answer_dict_, _ = convert_tokens(eval_file, ids.tolist(), y1.tolist(), y2.tolist())
+            y1_ = torch.argmax(p1, 1)
+            y2_ = torch.argmax(p2, 1)
+            answer_dict_, _ = convert_tokens(eval_file, ids.tolist(), y1_.tolist(), y2_.tolist())
             answer_dict.update(answer_dict_)
     loss = np.mean(losses)
     metrics = evaluate(eval_file, answer_dict)
+    f = open("log/ans_{}.json".format(epoch), "w")
+    json.dump(answer_dict, f)
+    f.close()
     metrics["loss"] = loss
     print("EPOCH {:8d} loss {:8f} F1 {:8f} EM {:8f}\n".format(epoch, loss, metrics["f1"], metrics["exact_match"]))
     return metrics
