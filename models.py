@@ -89,22 +89,21 @@ class SelfAttention(nn.Module):
         WQs, WKs, WVs = [], [], []
         sqrt_dk_inv = 1/math.sqrt(Dk)
         for i in range(Nh):
-            WQs.append(torch.bmm(self.Wqs[i], x).to(cpu))
-            WKs.append(torch.bmm(self.Wks[i], x).to(cpu))
-            WVs.append(torch.bmm(self.Wvs[i], x).to(cpu))
+            WQs.append(torch.bmm(self.Wqs[i], x))
+            WKs.append(torch.bmm(self.Wks[i], x))
+            WVs.append(torch.bmm(self.Wvs[i], x))
         heads = []
         for i in range(Nh):
-            out = torch.bmm(WQs[i].to(device).transpose(1, 2), WKs[i].to(device))
+            out = torch.bmm(WQs[i].transpose(1, 2), WKs[i])
             out = torch.mul(out, sqrt_dk_inv)
             # not sure... I think `dim` should be 1 since it weighted each column of `WVs[i]`
             out = F.softmax(out, dim=1)
-            headi = torch.bmm(WVs[i].to(device), out).to(cpu)
+            headi = torch.bmm(WVs[i], out)
             WVs[i], WKs[i], WQs[i] = None, None, None
             heads.append(headi)
             torch.cuda.empty_cache()
         head = torch.cat(heads, dim=1)
-        del heads
-        out = torch.bmm(self.Wo, head.to(device))
+        out = torch.bmm(self.Wo, head)
         return out
 
 
@@ -224,11 +223,7 @@ class QANet(nn.Module):
         self.cq_att = CQAttention()
         self.cq_resizer = DepthwiseSeparableConv(D * 4, D, 5)
         enc_blk = EncoderBlock(conv_num=2, ch_num=D, k=5, length=Lc)
-        # enc_blk2 = EncoderBlock(conv_num=2, ch_num=D, k=5, length=Lc)
-        # enc_blk3 = EncoderBlock(conv_num=2, ch_num=D, k=5, length=Lc)
         self.model_enc_blks = nn.Sequential(*([enc_blk] * 7))
-        # self.model_enc_blks2 = nn.Sequential(*([enc_blk2] * 7))
-        # self.model_enc_blks3 = nn.Sequential(*([enc_blk3] * 7))
         self.out = Pointer()
 
     def forward(self, Cwid, Ccid, Qwid, Qcid):
@@ -240,11 +235,8 @@ class QANet(nn.Module):
         X = self.cq_att(Ce, Qe)
         M0 = self.cq_resizer(X)
         M1 = self.model_enc_blks(M0)
-        M0 = M0.to(cpu)
         M2 = self.model_enc_blks(M1)
-        M1 = M1.to(cpu)
         M3 = self.model_enc_blks(M2)
-        M1 = M1.to(device)
         p1, p2 = self.out(M1, M2, M3)
         p1, p2 = torch.exp(p1), torch.exp(p2)
         return p1, p2
