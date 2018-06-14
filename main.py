@@ -195,6 +195,8 @@ def train_entry(config):
         ee + 1) if ee + 1 <= 1000 else lr)
     L = config.checkpoint
     N = config.num_steps
+    best_f1 = 0
+    best_em = 0
     for ep in range(L, N+L, L):
         train(model, scheduler, train_dataset, ep, L)
         metrics = test(model, dev_dataset, dev_eval_file, ep)
@@ -206,8 +208,8 @@ def train_entry(config):
                 break
         else:
             patience = 0
-            best_em = max(best_em, dev_em)
             best_f1 = max(best_f1, dev_f1)
+            best_em = max(best_em, dev_em)
 
         fn = os.path.join(config.save_dir, "model_{}.ckpt".format(ep))
         torch.save(model, fn, pickle_protocol=False)
