@@ -1,22 +1,33 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.optim as optim
 import math
 from config import config, device, cpu
+from absl import app
+import os
+import numpy as np
+import ujson as json
+import re
+from collections import Counter
+import string
+from tqdm import tqdm
+import random
 
-D = config.connector_dim
-Nh = config.num_heads
-Dword = config.glove_dim
-Dchar = config.char_dim
-batch_size = config.batch_size
-dropout = config.dropout
-dropout_char = config.dropout_char
+D = 128
+Nh = 8
+Dword = 300
+Dchar = 64
+batch_size = 8
+dropout = 0.8
+dropout_char = 0.5
 
 Dk = D // Nh
 Dv = D // Nh
-D_cq_att = D * 4
-Lc = config.para_limit
-Lq = config.ques_limit
+cq_att_size = D * 4
+
+cl = 400
+ql = 50
 
 
 class PosEncoder(nn.Module):
@@ -87,7 +98,7 @@ class SelfAttention(nn.Module):
 
     def forward(self, x: torch.Tensor):
         WQs, WKs, WVs = [], [], []
-        sqrt_dk_inv = 1/math.sqrt(Dk)
+        sqrt_dk_inv = 1 / math.sqrt(Dk)
         for i in range(Nh):
             WQs.append(torch.bmm(self.Wqs[i], x).to(cpu))
             WKs.append(torch.bmm(self.Wks[i], x).to(cpu))
@@ -168,20 +179,27 @@ class EncoderBlock(nn.Module):
 class CQAttention(nn.Module):
     def __init__(self):
         super().__init__()
-        W = torch.empty(batch_size * Lc, 1, D * 3)
+        W = torch.empty(batch_size * cl, 1, D * 3)
         nn.init.xavier_normal_(W)
         self.W = nn.Parameter(W.data)
+        # self.S = nn.Parameter(torch.zeros(batch_size, cl, ql).data, requires_grad=False)
 
     def forward(self, C, Q):
+        # for i in range(cl):
+        #     for j in range(ql):
+        #         c = C[:, :, i]
+        #         q = Q[:, :, j]
+        #         v = torch.cat([q, c, torch.mul(q, c)], dim=1).unsqueeze(dim=2)
+        #         self.S[:, i, j] = torch.bmm(self.W, v).squeeze()
         ss = []
         C = C.permute(0, 2, 1)
         Q = Q.permute(0, 2, 1)
-        for i in range(Lc):
+        for i in range(ql):
             q = Q[:, i, :].unsqueeze(1)
             QCi = torch.mul(q, C)
-            Qi = q.expand(batch_size, Lc, D)
-            Xi = torch.cat([Qi, C, QCi], dim=2).reshape(batch_size * Lc, D * 3).unsqueeze(2)
-            Si = torch.bmm(self.W, Xi).reshape(batch_size, Lc, 1)
+            Qi = q.expand(batch_size, cl, D)
+            Xi = torch.cat([Qi, C, QCi], dim=2).reshape(batch_size * cl, D * 3).unsqueeze(2)
+            Si = torch.bmm(self.W, Xi).reshape(batch_size, cl, 1)
             ss.append(Si)
         S = torch.cat(ss, dim=2)
         S1 = F.softmax(S, dim=2)
@@ -214,21 +232,17 @@ class Pointer(nn.Module):
 
 
 class QANet(nn.Module):
-    def __init__(self, word_mat, char_mat):
+    def __init__(self):
         super().__init__()
-        self.char_emb = nn.Embedding.from_pretrained(torch.Tensor(char_mat), freeze=(not config.pretrained_char))
-        self.word_emb = nn.Embedding.from_pretrained(torch.Tensor(word_mat))
+        self.char_emb = nn.Embedding(1000, Dchar)
+        self.word_emb = nn.Embedding(1000, Dword)
         self.emb = Embedding()
-        self.c_emb_enc = EncoderBlock(conv_num=4, ch_num=D, k=7, length=Lc)
-        self.q_emb_enc = EncoderBlock(conv_num=4, ch_num=D, k=7, length=Lq)
+        self.c_emb_enc = EncoderBlock(conv_num=4, ch_num=D, k=7, length=cl)
+        self.q_emb_enc = EncoderBlock(conv_num=4, ch_num=D, k=7, length=ql)
         self.cq_att = CQAttention()
         self.cq_resizer = DepthwiseSeparableConv(D * 4, D, 5)
-        enc_blk = EncoderBlock(conv_num=2, ch_num=D, k=5, length=Lc)
-        # enc_blk2 = EncoderBlock(conv_num=2, ch_num=D, k=5, length=Lc)
-        # enc_blk3 = EncoderBlock(conv_num=2, ch_num=D, k=5, length=Lc)
+        enc_blk = EncoderBlock(conv_num=2, ch_num=D, k=5, length=cl)
         self.model_enc_blks = nn.Sequential(*([enc_blk] * 7))
-        # self.model_enc_blks2 = nn.Sequential(*([enc_blk2] * 7))
-        # self.model_enc_blks3 = nn.Sequential(*([enc_blk3] * 7))
         self.out = Pointer()
 
     def forward(self, Cwid, Ccid, Qwid, Qcid):
@@ -240,11 +254,47 @@ class QANet(nn.Module):
         X = self.cq_att(Ce, Qe)
         M0 = self.cq_resizer(X)
         M1 = self.model_enc_blks(M0)
-        M0 = M0.to(cpu)
         M2 = self.model_enc_blks(M1)
-        M1 = M1.to(cpu)
         M3 = self.model_enc_blks(M2)
-        M1 = M1.to(device)
         p1, p2 = self.out(M1, M2, M3)
         p1, p2 = torch.exp(p1), torch.exp(p2)
         return p1, p2
+
+
+def get_random():
+    cwid = torch.randint(1000, (batch_size, cl), dtype=torch.long)
+    ccid = torch.randint(1000, (batch_size, cl, 16), dtype=torch.long)
+    qwid = torch.randint(1000, (batch_size, ql), dtype=torch.long)
+    qcid = torch.randint(1000, (batch_size, ql, 16), dtype=torch.long)
+    y1 = torch.randint(cl, (batch_size,), dtype=torch.long)
+    y2 = torch.randint(cl, (batch_size,), dtype=torch.long)
+    ids = torch.randint(1000, (batch_size,), dtype=torch.long)
+    return cwid, ccid, qwid, qcid, y1, y2, ids
+
+
+def main(_):
+    lr = 0.0001
+
+    model = QANet().to(device)
+    model.train()
+    parameters = filter(lambda param: param.requires_grad, model.parameters())
+    optimizer = optim.Adam(betas=(0.8, 0.999), eps=1e-7, weight_decay=3e-7, params=parameters)
+    crit = lr / math.log2(1000)
+    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda ee: crit * math.log2(
+        ee + 1) if ee + 1 <= 1000 else lr)
+
+    for ep in tqdm(range(1000), total=1000):
+        model.zero_grad()
+        (Cwid, Ccid, Qwid, Qcid, y1, y2, ids) = get_random()
+        Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
+        p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
+        y1, y2 = y1.to(device), y2.to(device)
+        loss1 = F.cross_entropy(p1, y1)
+        loss2 = F.cross_entropy(p2, y2)
+        loss = loss1 + loss2
+        loss.backward(retain_graph=False)
+        scheduler.step()
+
+
+if __name__ == '__main__':
+    app.run(main)

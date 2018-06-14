@@ -187,7 +187,7 @@ def train(config):
         loss1 = F.cross_entropy(p1, y1)
         loss2 = F.cross_entropy(p2, y2)
         loss = loss1 + loss2
-        loss.backward(retain_graph=True)
+        loss.backward(retain_graph=False)
         scheduler.step()
         del loss, p1, p2
         torch.cuda.empty_cache()
