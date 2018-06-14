@@ -1,4 +1,4 @@
-from config import config, device, cpu
+from config import config, device
 from preproc import preproc
 from absl import app
 import math
@@ -14,8 +14,11 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.cuda
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 
+'''
+Some functions are from the official evaluation script.
+'''
 
 class SQuADDataset(Dataset):
     def __init__(self, npz_file, num_steps, batch_size):
@@ -127,7 +130,7 @@ def metric_max_over_ground_truths(metric_fn, prediction, ground_truths):
 def train(model, optimizer, dataset, epoch, length):
     model.train()
     losses = []
-    for i in tqdm(range(1,length+1), total=length):
+    for i in tqdm(range(1, length + 1), total=length):
         model.zero_grad()
         (Cwid, Ccid, Qwid, Qcid, y1, y2, ids) = dataset[i]
         Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
@@ -149,7 +152,7 @@ def test(model, dataset, eval_file, epoch):
     losses = []
     num_batches = len(dataset)
     with torch.no_grad():
-        for i in tqdm(range(1,num_batches+1), total=num_batches):
+        for i in tqdm(range(1, num_batches + 1), total=num_batches):
             Cwid, Ccid, Qwid, Qcid, y1, y2, ids = dataset[i]
             Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
             p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
@@ -176,10 +179,7 @@ def train_entry(config):
         char_mat = np.array(json.load(fh), dtype=np.float32)
     with open(config.dev_eval_file, "r") as fh:
         dev_eval_file = json.load(fh)
-    with open(config.dev_meta, "r") as fh:
-        meta = json.load(fh)
 
-    dev_total = meta["total"]
     print("Building model...")
 
     train_dataset = SQuADDataset(config.train_record_file, config.num_steps, config.batch_size)
@@ -197,7 +197,7 @@ def train_entry(config):
     N = config.num_steps
     best_f1 = 0
     best_em = 0
-    for ep in range(L, N+L, L):
+    for ep in range(L, N + L, L):
         train(model, scheduler, train_dataset, ep, L)
         metrics = test(model, dev_dataset, dev_eval_file, ep)
         dev_f1 = metrics["f1"]
