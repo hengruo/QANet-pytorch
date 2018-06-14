@@ -131,9 +131,9 @@ def convert_to_features(config, data, word2idx_dict, char2idx_dict):
     example['context_chars'] = [list(token) for token in example['context_tokens']]
     example['ques_chars'] = [list(token) for token in example['ques_tokens']]
 
-    para_limit = config.test_para_limit
-    ques_limit = config.test_ques_limit
-    ans_limit = 100
+    para_limit = config.para_limit
+    ques_limit = config.ques_limit
+    ans_limit = config.ans_limit
     char_limit = config.char_limit
 
     def filter_func(example):
@@ -183,9 +183,9 @@ def convert_to_features(config, data, word2idx_dict, char2idx_dict):
 
 
 def build_features(config, examples, data_type, out_file, word2idx_dict, char2idx_dict, is_test=False):
-    para_limit = config.test_para_limit if is_test else config.para_limit
-    ques_limit = config.test_ques_limit if is_test else config.ques_limit
-    ans_limit = 100 if is_test else config.ans_limit
+    para_limit = config.para_limit
+    ques_limit = config.ques_limit
+    ans_limit = config.ans_limit
     char_limit = config.char_limit
 
     def filter_func(example, is_test=False):
