@@ -20,13 +20,13 @@ from torch.utils.data import Dataset, DataLoader
 class SQuADDataset(Dataset):
     def __init__(self, npz_file, num_steps, batch_size):
         data = np.load(npz_file)
-        self.context_idxs = torch.Tensor(data["context_idxs"]).long()
-        self.context_char_idxs = torch.Tensor(data["context_char_idxs"]).long()
-        self.ques_idxs = torch.Tensor(data["ques_idxs"]).long()
-        self.ques_char_idxs = torch.Tensor(data["ques_char_idxs"]).long()
-        self.y1s = torch.Tensor(data["y1s"]).long()
-        self.y2s = torch.Tensor(data["y2s"]).long()
-        self.ids = torch.Tensor(data["ids"]).long()
+        self.context_idxs = torch.from_numpy(data["context_idxs"])
+        self.context_char_idxs = torch.from_numpy(data["context_char_idxs"])
+        self.ques_idxs = torch.from_numpy(data["ques_idxs"])
+        self.ques_char_idxs = torch.from_numpy(data["ques_char_idxs"])
+        self.y1s = torch.from_numpy(data["y1s"])
+        self.y2s = torch.from_numpy(data["y2s"])
+        self.ids = torch.from_numpy(data["ids"])
         num = len(self.ids)
         self.num_steps = num_steps
         self.batch_size = batch_size
@@ -46,7 +46,7 @@ class SQuADDataset(Dataset):
         return self.num_steps
 
     def __getitem__(self, item):
-        idxs = torch.Tensor(self.idx_map[item:item + self.batch_size]).long()
+        idxs = torch.IntTensor(self.idx_map[item:item + self.batch_size])
         res = (self.context_idxs[idxs], self.context_char_idxs[idxs], self.ques_idxs[idxs], self.ques_char_idxs[idxs],
                self.y1s[idxs],
                self.y2s[idxs], self.ids[idxs])
@@ -174,8 +174,6 @@ def train_entry(config):
         word_mat = np.array(json.load(fh), dtype=np.float32)
     with open(config.char_emb_file, "r") as fh:
         char_mat = np.array(json.load(fh), dtype=np.float32)
-    with open(config.train_eval_file, "r") as fh:
-        train_eval_file = json.load(fh)
     with open(config.dev_eval_file, "r") as fh:
         dev_eval_file = json.load(fh)
     with open(config.dev_meta, "r") as fh:
