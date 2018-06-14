@@ -20,13 +20,13 @@ from torch.utils.data import Dataset, DataLoader
 class SQuADDataset(Dataset):
     def __init__(self, npz_file, num_steps, batch_size):
         data = np.load(npz_file)
-        self.context_idxs = torch.from_numpy(data["context_idxs"])
-        self.context_char_idxs = torch.from_numpy(data["context_char_idxs"])
-        self.ques_idxs = torch.from_numpy(data["ques_idxs"])
-        self.ques_char_idxs = torch.from_numpy(data["ques_char_idxs"])
-        self.y1s = torch.from_numpy(data["y1s"])
-        self.y2s = torch.from_numpy(data["y2s"])
-        self.ids = torch.from_numpy(data["ids"])
+        self.context_idxs = torch.from_numpy(data["context_idxs"]).long()
+        self.context_char_idxs = torch.from_numpy(data["context_char_idxs"]).long()
+        self.ques_idxs = torch.from_numpy(data["ques_idxs"]).long()
+        self.ques_char_idxs = torch.from_numpy(data["ques_char_idxs"]).long()
+        self.y1s = torch.from_numpy(data["y1s"]).long()
+        self.y2s = torch.from_numpy(data["y2s"]).long()
+        self.ids = torch.from_numpy(data["ids"]).long()
         num = len(self.ids)
         self.num_steps = num_steps
         self.batch_size = batch_size
