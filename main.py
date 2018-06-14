@@ -189,10 +189,8 @@ def train(config):
         loss = loss1 + loss2
         loss.backward(retain_graph=False)
         scheduler.step()
-        del loss, p1, p2
         torch.cuda.empty_cache()
         if (ep + 1) % config.checkpoint == 0:
-            del Cwid, Ccid, Qwid, Qcid, y1, y2, p1, p2, loss
             torch.cuda.empty_cache()
             metric = evaluate_batch(model, dev_eval_file, dev_dataset)
             log_ = "EPOCH {:8d} loss {:8f} F1 {:8f} EM {:8f}\n".format(ep, metric["loss"], metric["f1"],
