@@ -3,6 +3,8 @@
 ## NOTICE
 This repo is under re-implementation. Due to frequent modification, this code may not run normally.
 
+Any contributions are welcome!
+
 ## Introduction
 
 An implementation of [QANet](https://arxiv.org/pdf/1804.09541.pdf) with PyTorch.
@@ -38,3 +40,6 @@ models.py: QANet structure.
 - [ ] Performance analysis
 - [ ] Reach state-of-art scroes of the original paper
 - [ ] Ablation analysis
+
+## Contributors
+[InitialBug](https://github.com/InitialBug): find a bug.
