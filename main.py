@@ -63,10 +63,15 @@ def convert_tokens(eval_file, qa_id, pp1, pp2):
         context = eval_file[str(qid)]["context"]
         spans = eval_file[str(qid)]["spans"]
         uuid = eval_file[str(qid)]["uuid"]
-        start_idx = spans[p1][0]
-        end_idx = spans[p2][1]
-        answer_dict[str(qid)] = context[start_idx: end_idx]
-        remapped_dict[uuid] = context[start_idx: end_idx]
+        l = len(spans)
+        if p1 >= l or p2 >= l:
+            ans = ""
+        else:
+            start_idx = spans[p1][0]
+            end_idx = spans[p2][1]
+            ans = context[start_idx: end_idx]
+        answer_dict[str(qid)] = ans
+        remapped_dict[uuid] = ans
     return answer_dict, remapped_dict
 
 
@@ -161,9 +166,9 @@ def test(model, dataset, eval_file, epoch):
             loss2 = F.cross_entropy(p2, y2)
             loss = loss1 + loss2
             losses.append(loss.item())
-            y1_ = torch.argmax(p1, 1)
-            y2_ = torch.argmax(p2, 1)
-            answer_dict_, _ = convert_tokens(eval_file, ids.tolist(), y1_.tolist(), y2_.tolist())
+            yp1 = torch.argmax(p1, 1)
+            yp2 = torch.argmax(p2, 1)
+            answer_dict_, _ = convert_tokens(eval_file, ids.tolist(), yp1.tolist(), yp2.tolist())
             answer_dict.update(answer_dict_)
     loss = np.mean(losses)
     metrics = evaluate(eval_file, answer_dict)
