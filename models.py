@@ -176,7 +176,7 @@ class CQAttention(nn.Module):
         ss = []
         C = C.permute(0, 2, 1)
         Q = Q.permute(0, 2, 1)
-        for i in range(Lc):
+        for i in range(Lq):
             q = Q[:, i, :].unsqueeze(1)
             QCi = torch.mul(q, C)
             Qi = q.expand(batch_size, Lc, D)
