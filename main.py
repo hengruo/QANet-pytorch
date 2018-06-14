@@ -212,7 +212,7 @@ def train_entry(config):
             best_em = max(best_em, dev_em)
 
         fn = os.path.join(config.save_dir, "model_{}.ckpt".format(ep))
-        torch.save(model, fn, pickle_protocol=False)
+        torch.save(model, fn)
 
 
 def test_entry(config):
