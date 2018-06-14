@@ -124,11 +124,11 @@ def metric_max_over_ground_truths(metric_fn, prediction, ground_truths):
     return max(scores_for_ground_truths)
 
 
-def evaluate_batch(model, eval_file, dataset):
-    answer_dict = {}
+def train(model, optimizer, dataset, epoch, length):
+    model.train()
     losses = []
-    num_batches = len(dataset)
-    for i in tqdm(range(num_batches), total=num_batches):
+    for i in tqdm(range(1,length+1), total=length):
+        model.zero_grad()
         (Cwid, Ccid, Qwid, Qcid, y1, y2, ids) = dataset[i]
         Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
         p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
@@ -137,17 +137,37 @@ def evaluate_batch(model, eval_file, dataset):
         loss2 = F.cross_entropy(p2, y2)
         loss = loss1 + loss2
         losses.append(loss.item())
-        del loss, p1, p2
-        answer_dict_, _ = convert_tokens(
-            eval_file, ids.tolist(), y1.tolist(), y2.tolist())
-        answer_dict.update(answer_dict_)
+        loss.backward()
+        optimizer.step()
+    loss_avg = np.mean(losses)
+    print("EPOCH {:8d} loss {:8f}\n".format(epoch, loss_avg))
+
+
+def test(model, dataset, eval_file, epoch):
+    model.eval()
+    answer_dict = {}
+    losses = []
+    num_batches = len(dataset)
+    with torch.no_grad():
+        for i in tqdm(range(1,num_batches+1), total=num_batches):
+            Cwid, Ccid, Qwid, Qcid, y1, y2, ids = dataset[i]
+            Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
+            p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
+            y1, y2 = y1.to(device), y2.to(device)
+            loss1 = F.cross_entropy(p1, y1)
+            loss2 = F.cross_entropy(p2, y2)
+            loss = loss1 + loss2
+            losses.append(loss.item())
+            answer_dict_, _ = convert_tokens(eval_file, ids.tolist(), y1.tolist(), y2.tolist())
+            answer_dict.update(answer_dict_)
     loss = np.mean(losses)
     metrics = evaluate(eval_file, answer_dict)
     metrics["loss"] = loss
+    print("EPOCH {:8d} loss {:8f} F1 {:8f} EM {:8f}\n".format(epoch, loss, metrics["f1"], metrics["exact_match"]))
     return metrics
 
 
-def train(config):
+def train_entry(config):
     from models import QANet
 
     with open(config.word_emb_file, "r") as fh:
@@ -160,7 +180,6 @@ def train(config):
         dev_eval_file = json.load(fh)
     with open(config.dev_meta, "r") as fh:
         meta = json.load(fh)
-    train_log = open(config.train_log, "w")
 
     dev_total = meta["total"]
     print("Building model...")
@@ -171,72 +190,48 @@ def train(config):
     lr = config.learning_rate
 
     model = QANet(word_mat, char_mat).to(device)
-    model.train()
     parameters = filter(lambda param: param.requires_grad, model.parameters())
     optimizer = optim.Adam(betas=(0.8, 0.999), eps=1e-7, weight_decay=3e-7, params=parameters)
     crit = lr / math.log2(1000)
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda ee: crit * math.log2(
         ee + 1) if ee + 1 <= 1000 else lr)
+    L = config.checkpoint
+    N = config.num_steps
+    for ep in range(L, N+L, L):
+        train(model, scheduler, train_dataset, ep, L)
+        metrics = test(model, dev_dataset, dev_eval_file, ep)
+        dev_f1 = metrics["f1"]
+        dev_em = metrics["exact_match"]
+        if dev_f1 < best_f1 and dev_em < best_em:
+            patience += 1
+            if patience > config.early_stop:
+                break
+        else:
+            patience = 0
+            best_em = max(best_em, dev_em)
+            best_f1 = max(best_f1, dev_f1)
 
-    for ep in tqdm(range(config.num_steps), total=config.num_steps):
-        model.zero_grad()
-        (Cwid, Ccid, Qwid, Qcid, y1, y2, ids) = train_dataset[ep]
-        Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
-        p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
-        y1, y2 = y1.to(device), y2.to(device)
-        loss1 = F.cross_entropy(p1, y1)
-        loss2 = F.cross_entropy(p2, y2)
-        loss = loss1 + loss2
-        loss.backward(retain_graph=False)
-        scheduler.step()
-        if (ep + 1) % config.checkpoint == 1:
-            del Cwid, Ccid, Qwid, Qcid, y1, y2, p1, p2, loss
-            torch.cuda.empty_cache()
-            metric = evaluate_batch(model, dev_eval_file, dev_dataset)
-            log_ = "EPOCH {:8d} loss {:8f} F1 {:8f} EM {:8f}\n".format(ep, metric["loss"], metric["f1"],
-                                                                       metric["exact_match"])
-            train_log.write(log_)
-            train_log.flush()
-            dev_f1 = metric["f1"]
-            dev_em = metric["exact_match"]
-            if dev_f1 < best_f1 and dev_em < best_em:
-                patience += 1
-                if patience > config.early_stop:
-                    break
-            else:
-                patience = 0
-                best_em = max(best_em, dev_em)
-                best_f1 = max(best_f1, dev_f1)
-
-            fn = os.path.join(config.save_dir, "model_{}.ckpt".format(ep))
-            torch.save(model, fn, pickle_protocol=False)
+        fn = os.path.join(config.save_dir, "model_{}.ckpt".format(ep))
+        torch.save(model, fn, pickle_protocol=False)
 
 
-def test(config):
+def test_entry(config):
     pass
-
-
-def dev(config):
-    from models import EncoderBlock
-    encoder = EncoderBlock(4, config.connector_dim, 7)
-    print(encoder._parameters)
 
 
 def main(_):
     if config.mode == "train":
-        train(config)
+        train_entry(config)
     elif config.mode == "data":
         preproc(config)
     elif config.mode == "debug":
-        config.num_steps = 2
-        config.val_num_batches = 1
-        config.checkpoint = 1
+        config.num_steps = 4
+        config.val_num_batches = 2
+        config.checkpoint = 2
         config.period = 1
-        train(config)
+        train_entry(config)
     elif config.mode == "test":
-        test(config)
-    elif config.mode == "dev":
-        dev(config)
+        test_entry(config)
     else:
         print("Unknown mode")
         exit(0)
