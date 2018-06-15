@@ -212,7 +212,7 @@ class Pointer(nn.Module):
 class QANet(nn.Module):
     def __init__(self, word_mat, char_mat):
         super().__init__()
-        self.char_emb = nn.Embedding.from_pretrained(torch.Tensor(char_mat), freeze=(not config.pretrained_char))
+        self.char_emb = nn.Embedding.from_pretrained(torch.Tensor(char_mat), freeze=config.pretrained_char)
         self.word_emb = nn.Embedding.from_pretrained(torch.Tensor(word_mat))
         self.emb = Embedding()
         self.c_emb_enc = EncoderBlock(conv_num=4, ch_num=D, k=7, length=Lc)

@@ -132,10 +132,10 @@ def metric_max_over_ground_truths(metric_fn, prediction, ground_truths):
     return max(scores_for_ground_truths)
 
 
-def train(model, optimizer, dataset, epoch, length):
+def train(model, optimizer, dataset, start, length):
     model.train()
     losses = []
-    for i in tqdm(range(1, length + 1), total=length):
+    for i in tqdm(range(start, length + start), total=length):
         model.zero_grad()
         Cwid, Ccid, Qwid, Qcid, y1, y2, ids = dataset[i]
         Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
@@ -148,7 +148,7 @@ def train(model, optimizer, dataset, epoch, length):
         loss.backward()
         optimizer.step()
     loss_avg = np.mean(losses)
-    print("EPOCH {:8d} loss {:8f}\n".format(epoch, loss_avg))
+    print("EPOCH {:8d} loss {:8f}\n".format(i+1, loss_avg))
 
 
 def test(model, dataset, eval_file, epoch):
@@ -208,9 +208,9 @@ def train_entry(config):
     best_f1 = 0
     best_em = 0
     patience = 0
-    for ep in range(L, N + L, L):
+    for ep in range(0, N, L):
         train(model, scheduler, train_dataset, ep, L)
-        metrics = test(model, dev_dataset, dev_eval_file, ep)
+        metrics = test(model, dev_dataset, dev_eval_file, ep + L)
         dev_f1 = metrics["f1"]
         dev_em = metrics["exact_match"]
         if dev_f1 < best_f1 and dev_em < best_em:
