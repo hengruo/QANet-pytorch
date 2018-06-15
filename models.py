@@ -91,14 +91,17 @@ class SelfAttention(nn.Module):
             WKs.append(torch.bmm(self.Wks[i], x).to(cpu))
             WVs.append(torch.bmm(self.Wvs[i], x).to(cpu))
         heads = []
-        for _ in range(Nh):
-            out = torch.bmm(WQs.pop().to(device).transpose(1, 2), WKs.pop().to(device))
+        for i in range(Nh):
+            out = torch.bmm(WQs[i].to(device).transpose(1, 2), WKs[i].to(device))
             out = torch.mul(out, sqrt_dk_inv)
             # not sure... I think `dim` should be 1 since it weighted each column of `WVs[i]`
             out = F.softmax(out, dim=1)
-            headi = torch.bmm(WVs.pop().to(device), out).to(cpu)
+            headi = torch.bmm(WVs[i].to(device), out).to(cpu)
+            WVs[i], WKs[i], WQs[i] = None, None, None
             heads.append(headi)
+            torch.cuda.empty_cache()
         head = torch.cat(heads, dim=1)
+        del heads
         out = torch.bmm(self.Wo, head.to(device))
         return out
 
