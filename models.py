@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from config import config, device, cpu
+from config import config
 
 D = config.connector_dim
 Nh = config.num_heads
@@ -101,7 +101,6 @@ class SelfAttention(nn.Module):
             headi = torch.bmm(WVs[i], out)
             WVs[i], WKs[i], WQs[i] = None, None, None
             heads.append(headi)
-            torch.cuda.empty_cache()
         head = torch.cat(heads, dim=1)
         out = torch.bmm(self.Wo, head)
         return out
@@ -116,12 +115,12 @@ class Embedding(nn.Module):
 
     def forward(self, ch_emb, wd_emb):
         ch_emb = ch_emb.permute(0, 3, 1, 2)
-        ch_emb = F.dropout(ch_emb, p=dropout_char, training=self.training, inplace=True)
+        # ch_emb = F.dropout(ch_emb, p=dropout_char, training=self.training)
         ch_emb = self.conv2d(ch_emb)
         ch_emb = F.relu(ch_emb, inplace=True)
         ch_emb, _ = torch.max(ch_emb, dim=3)
         ch_emb = ch_emb.squeeze()
-        wd_emb = F.dropout(wd_emb, p=dropout, training=self.training, inplace=True)
+        # wd_emb = F.dropout(wd_emb, p=dropout, training=self.training)
         wd_emb = wd_emb.transpose(1, 2)
         emb = torch.cat([ch_emb, wd_emb], dim=1)
         emb = self.conv1d(emb)
@@ -144,23 +143,23 @@ class EncoderBlock(nn.Module):
         out = self.pos(x)
         res = out
         for i, conv in enumerate(self.convs):
-            out = self.norm(out)
+            # out = self.norm(out)
             out = conv(out)
             out = F.relu(out, inplace=True)
             out.add_(res)
-            if (i + 1) % 2 == 0:
-                out = F.dropout(out, p=dropout, training=self.training, inplace=True)
+            # if (i + 1) % 2 == 0:
+            #     out = F.dropout(out, p=dropout, training=self.training)
             res = out
-            out = self.norm(out)
+            # out = self.norm(out)
         out = self.self_att(out)
         out.add_(res)
-        out = F.dropout(out, p=dropout, training=self.training, inplace=True)
+        out = F.dropout(out, p=dropout, training=self.training)
         res = out
-        out = self.norm(out)
+        # out = self.norm(out)
         out = torch.bmm(self.W, out)
         out = F.relu(out, inplace=True)
-        out.add_(res)
-        out = F.dropout(out, p=dropout, training=self.training, inplace=True)
+        out = out + res
+        # out = F.dropout(out, p=dropout, training=self.training)
         return out
 
 
@@ -188,7 +187,7 @@ class CQAttention(nn.Module):
         A = torch.bmm(S1, Q)
         B = torch.bmm(torch.bmm(S1, S2.transpose(1, 2)), C)
         out = torch.cat([C, A, torch.mul(C, A), torch.mul(C, B)], dim=2).permute(0, 2, 1)
-        out = F.dropout(out, p=dropout, training=self.training, inplace=True)
+        # out = F.dropout(out, p=dropout, training=self.training)
         return out
 
 
@@ -207,9 +206,7 @@ class Pointer(nn.Module):
         X2 = torch.cat([M1, M3], dim=1)
         Y1 = torch.bmm(self.W1, X1).squeeze()
         Y2 = torch.bmm(self.W2, X2).squeeze()
-        p1 = F.log_softmax(Y1, dim=1)
-        p2 = F.log_softmax(Y2, dim=1)
-        return p1, p2
+        return Y1, Y2
 
 
 class QANet(nn.Module):
@@ -238,5 +235,4 @@ class QANet(nn.Module):
         M2 = self.model_enc_blks(M1)
         M3 = self.model_enc_blks(M2)
         p1, p2 = self.out(M1, M2, M3)
-        p1, p2 = torch.exp(p1), torch.exp(p2)
         return p1, p2

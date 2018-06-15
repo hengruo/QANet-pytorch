@@ -1,4 +1,4 @@
-from config import config, device, cpu
+from config import config, device
 from preproc import preproc
 from absl import app
 import math
@@ -14,8 +14,11 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.cuda
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 
+'''
+Some functions are from the official evaluation script.
+'''
 
 class SQuADDataset(Dataset):
     def __init__(self, npz_file, num_steps, batch_size):
@@ -60,10 +63,15 @@ def convert_tokens(eval_file, qa_id, pp1, pp2):
         context = eval_file[str(qid)]["context"]
         spans = eval_file[str(qid)]["spans"]
         uuid = eval_file[str(qid)]["uuid"]
-        start_idx = spans[p1][0]
-        end_idx = spans[p2][1]
-        answer_dict[str(qid)] = context[start_idx: end_idx]
-        remapped_dict[uuid] = context[start_idx: end_idx]
+        l = len(spans)
+        if p1 >= l or p2 >= l:
+            ans = ""
+        else:
+            start_idx = spans[p1][0]
+            end_idx = spans[p2][1]
+            ans = context[start_idx: end_idx]
+        answer_dict[str(qid)] = ans
+        remapped_dict[uuid] = ans
     return answer_dict, remapped_dict
 
 
@@ -127,9 +135,9 @@ def metric_max_over_ground_truths(metric_fn, prediction, ground_truths):
 def train(model, optimizer, dataset, epoch, length):
     model.train()
     losses = []
-    for i in tqdm(range(1,length+1), total=length):
+    for i in tqdm(range(1, length + 1), total=length):
         model.zero_grad()
-        (Cwid, Ccid, Qwid, Qcid, y1, y2, ids) = dataset[i]
+        Cwid, Ccid, Qwid, Qcid, y1, y2, ids = dataset[i]
         Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
         p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
         y1, y2 = y1.to(device), y2.to(device)
@@ -149,7 +157,7 @@ def test(model, dataset, eval_file, epoch):
     losses = []
     num_batches = len(dataset)
     with torch.no_grad():
-        for i in tqdm(range(1,num_batches+1), total=num_batches):
+        for i in tqdm(range(1, num_batches + 1), total=num_batches):
             Cwid, Ccid, Qwid, Qcid, y1, y2, ids = dataset[i]
             Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
             p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
@@ -158,10 +166,15 @@ def test(model, dataset, eval_file, epoch):
             loss2 = F.cross_entropy(p2, y2)
             loss = loss1 + loss2
             losses.append(loss.item())
-            answer_dict_, _ = convert_tokens(eval_file, ids.tolist(), y1.tolist(), y2.tolist())
+            yp1 = torch.argmax(p1, 1)
+            yp2 = torch.argmax(p2, 1)
+            answer_dict_, _ = convert_tokens(eval_file, ids.tolist(), yp1.tolist(), yp2.tolist())
             answer_dict.update(answer_dict_)
     loss = np.mean(losses)
     metrics = evaluate(eval_file, answer_dict)
+    f = open("log/ans_{}.json".format(epoch), "w")
+    json.dump(answer_dict, f)
+    f.close()
     metrics["loss"] = loss
     print("EPOCH {:8d} loss {:8f} F1 {:8f} EM {:8f}\n".format(epoch, loss, metrics["f1"], metrics["exact_match"]))
     return metrics
@@ -176,10 +189,7 @@ def train_entry(config):
         char_mat = np.array(json.load(fh), dtype=np.float32)
     with open(config.dev_eval_file, "r") as fh:
         dev_eval_file = json.load(fh)
-    with open(config.dev_meta, "r") as fh:
-        meta = json.load(fh)
 
-    dev_total = meta["total"]
     print("Building model...")
 
     train_dataset = SQuADDataset(config.train_record_file, config.num_steps, config.batch_size)
@@ -197,7 +207,8 @@ def train_entry(config):
     N = config.num_steps
     best_f1 = 0
     best_em = 0
-    for ep in range(L, N+L, L):
+    patience = 0
+    for ep in range(L, N + L, L):
         train(model, scheduler, train_dataset, ep, L)
         metrics = test(model, dev_dataset, dev_eval_file, ep)
         dev_f1 = metrics["f1"]
