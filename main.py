@@ -20,6 +20,7 @@ from torch.utils.data import Dataset
 Some functions are from the official evaluation script.
 '''
 
+
 class SQuADDataset(Dataset):
     def __init__(self, npz_file, num_steps, batch_size):
         data = np.load(npz_file)
@@ -148,7 +149,7 @@ def train(model, optimizer, dataset, start, length):
         loss.backward()
         optimizer.step()
     loss_avg = np.mean(losses)
-    print("EPOCH {:8d} loss {:8f}\n".format(i+1, loss_avg))
+    print("EPOCH {:8d} loss {:8f}\n".format(i + 1, loss_avg))
 
 
 def test(model, dataset, eval_file, epoch):
@@ -230,19 +231,61 @@ def test_entry(config):
     pass
 
 
+def dev(config):
+    from models import QANet
+
+    with open(config.word_emb_file, "r") as fh:
+        word_mat = np.array(json.load(fh), dtype=np.float32)
+    with open(config.char_emb_file, "r") as fh:
+        char_mat = np.array(json.load(fh), dtype=np.float32)
+    with open(config.dev_eval_file, "r") as fh:
+        dev_eval_file = json.load(fh)
+
+    print("Building model...")
+
+    train_dataset = SQuADDataset(config.train_record_file, config.num_steps, config.batch_size)
+    dev_dataset = SQuADDataset(config.dev_record_file, config.val_num_batches, config.batch_size)
+
+    lr = config.learning_rate
+
+    model = QANet(word_mat, char_mat).to(device)
+    parameters = filter(lambda param: param.requires_grad, model.parameters())
+    optimizer = optim.Adam(betas=(0.8, 0.999), eps=1e-7, weight_decay=3e-7, params=parameters)
+    crit = lr / math.log2(1000)
+    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda ee: crit * math.log2(
+        ee + 1) if ee + 1 <= 1000 else lr)
+    L = config.checkpoint
+    N = config.num_steps
+    for ep in range(0, N, L):
+        train(model, scheduler, train_dataset, ep, L)
+        res = {}
+        N = 3
+        res['char_emb'] = {"data": model.char_emb.weight.data[0:N].tolist(),
+                           "grad": model.char_emb.weight.grad[0:N].tolist()}
+        res['emb_conv2d'] = {"data": model.emb.conv2d.pointwise_conv.weight.data[0:N].tolist(),
+                             "grad": model.emb.conv2d.pointwise_conv.weight.grad[0:N].tolist()}
+        res['cqatt'] = {"data": model.cq_att.W.data[0:N].tolist(), "grad": model.cq_att.W.grad[0:N].tolist()}
+        res['enc_blks'] = {"data": model.model_enc_blks[6].W.data[0:N].tolist(),
+                           "grad": model.model_enc_blks[6].W.grad[0:N].tolist()}
+        f = open("log/W_{}.json".format(ep+L), "w")
+        json.dump(res, f)
+        f.close()
+
 def main(_):
     if config.mode == "train":
         train_entry(config)
     elif config.mode == "data":
         preproc(config)
     elif config.mode == "debug":
-        config.num_steps = 4
+        config.num_steps = 2
         config.val_num_batches = 2
-        config.checkpoint = 2
+        config.checkpoint = 1
         config.period = 1
         train_entry(config)
     elif config.mode == "test":
         test_entry(config)
+    elif config.mode == "dev":
+        dev(config)
     else:
         print("Unknown mode")
         exit(0)

@@ -215,7 +215,8 @@ class QANet(nn.Module):
         if config.pretrained_char:
             self.char_emb = nn.Embedding.from_pretrained(torch.Tensor(char_mat), freeze=True)
         else:
-            char_mat = nn.init.kaiming_uniform(torch.Tensor(char_mat))
+            char_mat = torch.Tensor(char_mat)
+            nn.init.kaiming_uniform_(char_mat)
             self.char_emb = nn.Embedding.from_pretrained(char_mat, freeze=False)
         self.word_emb = nn.Embedding.from_pretrained(torch.Tensor(word_mat))
         self.emb = Embedding()
