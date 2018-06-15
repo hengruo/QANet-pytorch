@@ -207,6 +207,7 @@ def train_entry(config):
     N = config.num_steps
     best_f1 = 0
     best_em = 0
+    patience = 0
     for ep in range(L, N + L, L):
         train(model, scheduler, train_dataset, ep, L)
         metrics = test(model, dev_dataset, dev_eval_file, ep)
