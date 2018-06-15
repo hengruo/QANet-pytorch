@@ -207,9 +207,7 @@ class Pointer(nn.Module):
         X2 = torch.cat([M1, M3], dim=1)
         Y1 = torch.bmm(self.W1, X1).squeeze()
         Y2 = torch.bmm(self.W2, X2).squeeze()
-        p1 = F.log_softmax(Y1, dim=1)
-        p2 = F.log_softmax(Y2, dim=1)
-        return p1, p2
+        return Y1, Y2
 
 
 class QANet(nn.Module):
@@ -238,5 +236,4 @@ class QANet(nn.Module):
         M2 = self.model_enc_blks(M1)
         M3 = self.model_enc_blks(M2)
         p1, p2 = self.out(M1, M2, M3)
-        p1, p2 = torch.exp(p1), torch.exp(p2)
         return p1, p2
