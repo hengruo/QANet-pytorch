@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from config import config, device, cpu
+from config import config
 
 D = config.connector_dim
 Nh = config.num_heads
@@ -14,7 +14,9 @@ dropout_char = config.dropout_char
 
 Dk = D // Nh
 Dv = D // Nh
-cq_att_size = D * 4
+D_cq_att = D * 4
+Lc = config.para_limit
+Lq = config.ques_limit
 
 
 class PosEncoder(nn.Module):
@@ -87,22 +89,21 @@ class SelfAttention(nn.Module):
         WQs, WKs, WVs = [], [], []
         sqrt_dk_inv = 1/math.sqrt(Dk)
         for i in range(Nh):
-            WQs.append(torch.bmm(self.Wqs[i], x).to(cpu))
-            WKs.append(torch.bmm(self.Wks[i], x).to(cpu))
-            WVs.append(torch.bmm(self.Wvs[i], x).to(cpu))
+            WQs.append(torch.bmm(self.Wqs[i], x))
+            WKs.append(torch.bmm(self.Wks[i], x))
+            WVs.append(torch.bmm(self.Wvs[i], x))
         heads = []
         for i in range(Nh):
-            out = torch.bmm(WQs[i].to(device).transpose(1, 2), WKs[i].to(device))
+            out = torch.bmm(WQs[i].transpose(1, 2), WKs[i])
             out = torch.mul(out, sqrt_dk_inv)
             # not sure... I think `dim` should be 1 since it weighted each column of `WVs[i]`
             out = F.softmax(out, dim=1)
-            headi = torch.bmm(WVs[i].to(device), out).to(cpu)
+            headi = torch.bmm(WVs[i], out)
             WVs[i], WKs[i], WQs[i] = None, None, None
             heads.append(headi)
             torch.cuda.empty_cache()
         head = torch.cat(heads, dim=1)
-        del heads
-        out = torch.bmm(self.Wo, head.to(device))
+        out = torch.bmm(self.Wo, head)
         return out
 
 
@@ -166,23 +167,27 @@ class EncoderBlock(nn.Module):
 class CQAttention(nn.Module):
     def __init__(self):
         super().__init__()
-        W = torch.empty(batch_size, 1, D * 3)
+        W = torch.empty(batch_size * Lc, 1, D * 3)
         nn.init.xavier_normal_(W)
         self.W = nn.Parameter(W.data)
-        self.S = nn.Parameter(torch.zeros(batch_size, config.para_limit, config.ques_limit).data, requires_grad=False)
 
     def forward(self, C, Q):
-        for i in range(config.para_limit):
-            for j in range(config.ques_limit):
-                c = C[:, :, i]
-                q = Q[:, :, j]
-                v = torch.cat([q, c, torch.mul(q, c)], dim=1).unsqueeze(dim=2)
-                self.S[:, i, j] = torch.bmm(self.W, v).squeeze()
-        S1 = F.softmax(self.S, dim=2)
-        S2 = F.softmax(self.S, dim=1)
-        A = torch.bmm(Q, S1.transpose(1, 2))
-        B = torch.bmm(C, torch.bmm(S1, S2.transpose(1, 2)).transpose(1, 2))
-        out = torch.cat([C, A, torch.mul(C, A), torch.mul(C, B)], dim=1)
+        ss = []
+        C = C.permute(0, 2, 1)
+        Q = Q.permute(0, 2, 1)
+        for i in range(Lq):
+            q = Q[:, i, :].unsqueeze(1)
+            QCi = torch.mul(q, C)
+            Qi = q.expand(batch_size, Lc, D)
+            Xi = torch.cat([Qi, C, QCi], dim=2).reshape(batch_size * Lc, D * 3).unsqueeze(2)
+            Si = torch.bmm(self.W, Xi).reshape(batch_size, Lc, 1)
+            ss.append(Si)
+        S = torch.cat(ss, dim=2)
+        S1 = F.softmax(S, dim=2)
+        S2 = F.softmax(S, dim=1)
+        A = torch.bmm(S1, Q)
+        B = torch.bmm(torch.bmm(S1, S2.transpose(1, 2)), C)
+        out = torch.cat([C, A, torch.mul(C, A), torch.mul(C, B)], dim=2).permute(0, 2, 1)
         out = F.dropout(out, p=dropout, training=self.training, inplace=True)
         return out
 
@@ -213,16 +218,12 @@ class QANet(nn.Module):
         self.char_emb = nn.Embedding.from_pretrained(torch.Tensor(char_mat), freeze=(not config.pretrained_char))
         self.word_emb = nn.Embedding.from_pretrained(torch.Tensor(word_mat))
         self.emb = Embedding()
-        self.c_emb_enc = EncoderBlock(conv_num=4, ch_num=D, k=7, length=config.para_limit)
-        self.q_emb_enc = EncoderBlock(conv_num=4, ch_num=D, k=7, length=config.ques_limit)
+        self.c_emb_enc = EncoderBlock(conv_num=4, ch_num=D, k=7, length=Lc)
+        self.q_emb_enc = EncoderBlock(conv_num=4, ch_num=D, k=7, length=Lq)
         self.cq_att = CQAttention()
         self.cq_resizer = DepthwiseSeparableConv(D * 4, D, 5)
-        enc_blk = EncoderBlock(conv_num=2, ch_num=D, k=5, length=config.para_limit)
-        # enc_blk2 = EncoderBlock(conv_num=2, ch_num=D, k=5, length=config.para_limit)
-        # enc_blk3 = EncoderBlock(conv_num=2, ch_num=D, k=5, length=config.para_limit)
+        enc_blk = EncoderBlock(conv_num=2, ch_num=D, k=5, length=Lc)
         self.model_enc_blks = nn.Sequential(*([enc_blk] * 7))
-        # self.model_enc_blks2 = nn.Sequential(*([enc_blk2] * 7))
-        # self.model_enc_blks3 = nn.Sequential(*([enc_blk3] * 7))
         self.out = Pointer()
 
     def forward(self, Cwid, Ccid, Qwid, Qcid):
@@ -234,11 +235,8 @@ class QANet(nn.Module):
         X = self.cq_att(Ce, Qe)
         M0 = self.cq_resizer(X)
         M1 = self.model_enc_blks(M0)
-        M0 = M0.to(cpu)
         M2 = self.model_enc_blks(M1)
-        M1 = M1.to(cpu)
         M3 = self.model_enc_blks(M2)
-        M1 = M1.to(device)
         p1, p2 = self.out(M1, M2, M3)
         p1, p2 = torch.exp(p1), torch.exp(p2)
         return p1, p2
