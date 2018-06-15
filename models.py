@@ -231,8 +231,8 @@ class QANet(nn.Module):
         Qe = self.q_emb_enc(Q)
         X = self.cq_att(Ce, Qe)
         M0 = self.cq_resizer(X)
-        M1 = self.model_enc_blks(M0)
-        M2 = self.model_enc_blks(M1)
-        M3 = self.model_enc_blks(M2)
-        p1, p2 = self.out(M1, M2, M3)
+        #M1 = self.model_enc_blks(M0)
+        #M2 = self.model_enc_blks(M1)
+        #M3 = self.model_enc_blks(M2)
+        p1, p2 = self.out(M0, M0, M0)
         return p1, p2
