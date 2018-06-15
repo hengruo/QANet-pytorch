@@ -1,0 +1,2 @@
+#!/bin/bash
+python main.py --mode train --checkpoint 500
