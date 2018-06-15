@@ -101,7 +101,6 @@ class SelfAttention(nn.Module):
             headi = torch.bmm(WVs[i], out)
             WVs[i], WKs[i], WQs[i] = None, None, None
             heads.append(headi)
-            torch.cuda.empty_cache()
         head = torch.cat(heads, dim=1)
         out = torch.bmm(self.Wo, head)
         return out
@@ -116,12 +115,12 @@ class Embedding(nn.Module):
 
     def forward(self, ch_emb, wd_emb):
         ch_emb = ch_emb.permute(0, 3, 1, 2)
-        ch_emb = F.dropout(ch_emb, p=dropout_char, training=self.training, inplace=True)
+        # ch_emb = F.dropout(ch_emb, p=dropout_char, training=self.training)
         ch_emb = self.conv2d(ch_emb)
         ch_emb = F.relu(ch_emb, inplace=True)
         ch_emb, _ = torch.max(ch_emb, dim=3)
         ch_emb = ch_emb.squeeze()
-        wd_emb = F.dropout(wd_emb, p=dropout, training=self.training, inplace=True)
+        # wd_emb = F.dropout(wd_emb, p=dropout, training=self.training)
         wd_emb = wd_emb.transpose(1, 2)
         emb = torch.cat([ch_emb, wd_emb], dim=1)
         emb = self.conv1d(emb)
@@ -144,23 +143,23 @@ class EncoderBlock(nn.Module):
         out = self.pos(x)
         res = out
         for i, conv in enumerate(self.convs):
-            out = self.norm(out)
+            # out = self.norm(out)
             out = conv(out)
             out = F.relu(out, inplace=True)
             out.add_(res)
-            if (i + 1) % 2 == 0:
-                out = F.dropout(out, p=dropout, training=self.training, inplace=True)
+            # if (i + 1) % 2 == 0:
+            #     out = F.dropout(out, p=dropout, training=self.training)
             res = out
-            out = self.norm(out)
+            # out = self.norm(out)
         out = self.self_att(out)
         out.add_(res)
-        out = F.dropout(out, p=dropout, training=self.training, inplace=True)
+        out = F.dropout(out, p=dropout, training=self.training)
         res = out
-        out = self.norm(out)
+        # out = self.norm(out)
         out = torch.bmm(self.W, out)
         out = F.relu(out, inplace=True)
-        out.add_(res)
-        out = F.dropout(out, p=dropout, training=self.training, inplace=True)
+        out = out + res
+        # out = F.dropout(out, p=dropout, training=self.training)
         return out
 
 
@@ -188,7 +187,7 @@ class CQAttention(nn.Module):
         A = torch.bmm(S1, Q)
         B = torch.bmm(torch.bmm(S1, S2.transpose(1, 2)), C)
         out = torch.cat([C, A, torch.mul(C, A), torch.mul(C, B)], dim=2).permute(0, 2, 1)
-        out = F.dropout(out, p=dropout, training=self.training, inplace=True)
+        # out = F.dropout(out, p=dropout, training=self.training)
         return out
 
 
