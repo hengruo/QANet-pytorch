@@ -75,11 +75,11 @@ class SelfAttention(nn.Module):
         Wqs = [torch.empty(batch_size, Dk, D) for _ in range(Nh)]
         Wks = [torch.empty(batch_size, Dk, D) for _ in range(Nh)]
         Wvs = [torch.empty(batch_size, Dv, D) for _ in range(Nh)]
-        nn.init.xavier_normal_(Wo)
+        nn.init.kaiming_uniform_(Wo)
         for i in range(Nh):
-            nn.init.xavier_normal_(Wqs[i])
-            nn.init.xavier_normal_(Wks[i])
-            nn.init.xavier_normal_(Wvs[i])
+            nn.init.kaiming_uniform_(Wqs[i])
+            nn.init.kaiming_uniform_(Wks[i])
+            nn.init.kaiming_uniform_(Wvs[i])
         self.Wo = nn.Parameter(Wo.data)
         self.Wqs = nn.ParameterList([nn.Parameter(X.data) for X in Wqs])
         self.Wks = nn.ParameterList([nn.Parameter(X.data) for X in Wks])
@@ -134,7 +134,7 @@ class EncoderBlock(nn.Module):
         self.convs = nn.ModuleList([DepthwiseSeparableConv(ch_num, ch_num, k) for _ in range(conv_num)])
         self.self_att = SelfAttention()
         W = torch.empty(batch_size, ch_num, ch_num)
-        nn.init.xavier_normal_(W)
+        nn.init.kaiming_uniform_(W)
         self.W = nn.Parameter(W.data)
         self.pos = PosEncoder(length)
         self.norm = nn.LayerNorm([D, length])
@@ -167,7 +167,7 @@ class CQAttention(nn.Module):
     def __init__(self):
         super().__init__()
         W = torch.empty(batch_size * Lc, 1, D * 3)
-        nn.init.xavier_normal_(W)
+        nn.init.kaiming_uniform_(W)
         self.W = nn.Parameter(W.data)
 
     def forward(self, C, Q):
@@ -196,8 +196,8 @@ class Pointer(nn.Module):
         super().__init__()
         W1 = torch.empty(batch_size, 1, D * 2)
         W2 = torch.empty(batch_size, 1, D * 2)
-        nn.init.xavier_normal_(W1)
-        nn.init.xavier_normal_(W2)
+        nn.init.kaiming_uniform_(W1)
+        nn.init.kaiming_uniform_(W2)
         self.W1 = nn.Parameter(W1.data)
         self.W2 = nn.Parameter(W2.data)
 
@@ -212,7 +212,11 @@ class Pointer(nn.Module):
 class QANet(nn.Module):
     def __init__(self, word_mat, char_mat):
         super().__init__()
-        self.char_emb = nn.Embedding.from_pretrained(torch.Tensor(char_mat), freeze=config.pretrained_char)
+        if config.pretrained_char:
+            self.char_emb = nn.Embedding.from_pretrained(torch.Tensor(char_mat), freeze=True)
+        else:
+            char_mat = nn.init.kaiming_uniform(torch.Tensor(char_mat))
+            self.char_emb = nn.Embedding.from_pretrained(char_mat, freeze=True)
         self.word_emb = nn.Embedding.from_pretrained(torch.Tensor(word_mat))
         self.emb = Embedding()
         self.c_emb_enc = EncoderBlock(conv_num=4, ch_num=D, k=7, length=Lc)
