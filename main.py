@@ -259,8 +259,8 @@ def dev(config):
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda ee: crit * math.log2(
         ee + 1) if ee + 1 <= 1000 else lr)
     L = config.checkpoint
-    N = config.num_steps
-    for ep in range(0, N, L):
+    NS = config.num_steps
+    for ep in range(0, NS, L):
         train(model, scheduler, train_dataset, ep, L)
         res = {}
         N = 3
