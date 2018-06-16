@@ -107,8 +107,7 @@ def get_embedding(counter, data_type, limit=-1, emb_file=None, vec_size=None):
 
     NULL = "--NULL--"
     OOV = "--OOV--"
-    token2idx_dict = {token: idx for idx,
-                                     token in enumerate(embedding_dict.keys(), 2)}
+    token2idx_dict = {token: idx for idx, token in enumerate(embedding_dict.keys(), 2)}
     token2idx_dict[NULL] = 0
     token2idx_dict[OOV] = 1
     embedding_dict[NULL] = [0. for _ in range(vec_size)]

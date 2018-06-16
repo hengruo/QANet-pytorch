@@ -199,11 +199,13 @@ class Pointer(nn.Module):
         self.w1 = nn.Parameter(w1)
         self.w2 = nn.Parameter(w2)
 
-    def forward(self, M1, M2, M3):
+    def forward(self, M1, M2, M3, mask):
+        ninf = torch.zeros_like(mask)
+        ninf.masked_fill_(ninf == mask, -float('inf'))
         X1 = torch.cat([M1, M2], dim=1)
         X2 = torch.cat([M1, M3], dim=1)
-        Y1 = torch.matmul(self.w1, X1)
-        Y2 = torch.matmul(self.w2, X2)
+        Y1 = torch.matmul(self.w1, X1) + ninf
+        Y2 = torch.matmul(self.w2, X2) + ninf
         p1 = F.log_softmax(Y1, dim=1)
         p2 = F.log_softmax(Y2, dim=1)
         return p1, p2
@@ -229,6 +231,7 @@ class QANet(nn.Module):
         self.out = Pointer()
 
     def forward(self, Cwid, Ccid, Qwid, Qcid):
+        mask = (torch.zeros_like(Cwid) != Cwid).float()
         Cw, Cc = self.word_emb(Cwid), self.char_emb(Ccid)
         Qw, Qc = self.word_emb(Qwid), self.char_emb(Qcid)
         C, Q = self.emb(Cc, Cw), self.emb(Qc, Qw)
@@ -239,5 +242,5 @@ class QANet(nn.Module):
         M1 = self.model_enc_blks(M0)
         M2 = self.model_enc_blks(M1)
         M3 = self.model_enc_blks(M2)
-        p1, p2 = self.out(M1, M2, M3)
+        p1, p2 = self.out(M1, M2, M3, mask)
         return p1, p2
