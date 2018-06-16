@@ -26,7 +26,7 @@ class PosEncoder(nn.Module):
             [10000 ** (-i / D) if i % 2 == 0 else -10000 ** ((1 - i) / D) for i in range(D)]).unsqueeze(dim=1)
         phases = torch.Tensor([0 if i % 2 == 0 else math.pi / 2 for i in range(D)]).unsqueeze(dim=1)
         pos = torch.arange(length).repeat(D, 1)
-        self.pos_encoding = torch.sin(torch.add(torch.mul(pos, freqs), phases))
+        self.pos_encoding = nn.Parameter(torch.sin(torch.add(torch.mul(pos, freqs), phases)), requires_grad=False)
 
     def forward(self, x):
         x = x + self.pos_encoding
