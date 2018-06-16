@@ -152,6 +152,7 @@ def train(model, optimizer, scheduler, dataset, start, length):
         loss.backward()
         optimizer.step()
         scheduler.step()
+        print(scheduler.get_lr())
     loss_avg = np.mean(losses)
     print("STEP {:8d} loss {:8f}\n".format(i + 1, loss_avg))
 
@@ -217,11 +218,12 @@ def train_entry(config):
     dev_dataset = SQuADDataset(config.dev_record_file, config.val_num_batches, config.batch_size)
 
     lr = config.learning_rate
+    base_lr = 1.0
 
     model = QANet(word_mat, char_mat).to(device)
     parameters = filter(lambda param: param.requires_grad, model.parameters())
-    optimizer = optim.Adam(betas=(0.8, 0.999), eps=1e-7, weight_decay=3e-7, params=parameters)
-    # optimizer = optim.SparseAdam(betas=(0.8, 0.999), eps=1e-7, params=parameters)
+    optimizer = optim.Adam(lr=base_lr, betas=(0.8, 0.999), eps=1e-7, weight_decay=3e-7, params=parameters)
+    # optimizer = optim.SparseAdam(lr=lr, betas=(0.8, 0.999), eps=1e-7, params=parameters)
     cr = lr / math.log2(1000)
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda ee: cr * math.log2(ee + 1) if ee < 1000 else lr)
     L = config.checkpoint
@@ -232,7 +234,7 @@ def train_entry(config):
     unused = True
     for iter in range(0, N, L):
         train(model, optimizer, scheduler, train_dataset, iter, L)
-        if iter > 1000 and unused:
+        if iter >= 1000 - 1 and unused:
             scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.9999)
             unused = False
         if config.print_weight:
