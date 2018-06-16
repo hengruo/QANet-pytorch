@@ -62,7 +62,7 @@ class Highway(nn.Module):
         x = x.transpose(1, 2)
         for i in range(self.n):
             gate = F.sigmoid(self.gate[i](x))
-            nonlinear = F.relu(self.linear[i](x))
+            nonlinear = F.tanh(self.linear[i](x))
             x = gate * nonlinear + (1 - gate) * x
         x = x.transpose(1, 2)
         return x
