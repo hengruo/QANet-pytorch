@@ -265,8 +265,8 @@ def dev(config):
         res['emb_conv2d'] = {"data": model.emb.conv2d.pointwise_conv.weight.data[0:N].tolist(),
                              "grad": model.emb.conv2d.pointwise_conv.weight.grad[0:N].tolist()}
         res['cqatt'] = {"data": model.cq_att.W.data[0:N].tolist(), "grad": model.cq_att.W.grad[0:N].tolist()}
-        res['enc_blks'] = {"data": model.model_enc_blks[6].W.data[0:N].tolist(),
-                           "grad": model.model_enc_blks[6].W.grad[0:N].tolist()}
+        res['enc_blks'] = {"data": model.model_enc_blks[6].fc.weight.data[0:N].tolist(),
+                           "grad": model.model_enc_blks[6].fc.weight.grad[0:N].tolist()}
         f = open("log/W_{}.json".format(ep+L), "w")
         json.dump(res, f)
         f.close()
