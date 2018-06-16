@@ -204,7 +204,9 @@ class Pointer(nn.Module):
         X2 = torch.cat([M1, M3], dim=1)
         Y1 = torch.matmul(self.w1, X1)
         Y2 = torch.matmul(self.w2, X2)
-        return Y1, Y2
+        p1 = F.log_softmax(Y1, dim=1)
+        p2 = F.log_softmax(Y2, dim=1)
+        return p1, p2
 
 
 class QANet(nn.Module):

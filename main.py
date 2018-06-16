@@ -167,8 +167,8 @@ def test(model, dataset, eval_file, epoch):
             Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
             p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
             y1, y2 = y1.to(device), y2.to(device)
-            loss1 = F.cross_entropy(p1, y1)
-            loss2 = F.cross_entropy(p2, y2)
+            loss1 = F.nll_loss(p1, y1)
+            loss2 = F.nll_loss(p2, y2)
             loss = loss1 + loss2
             losses.append(loss.item())
             yp1 = torch.argmax(p1, 1)
