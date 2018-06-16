@@ -136,8 +136,12 @@ def metric_max_over_ground_truths(metric_fn, prediction, ground_truths):
 def train(model, optimizer, dataset, start, length):
     model.train()
     losses = []
+    if isinstance(optimizer, optim.lr_scheduler.LambdaLR):
+        optimizer_ = optimizer.optimizer
+    else:
+        optimizer_ = optimizer
     for i in tqdm(range(start, length + start), total=length):
-        optimizer.zero_grad()
+        optimizer_.zero_grad()
         Cwid, Ccid, Qwid, Qcid, y1, y2, ids = dataset[i]
         Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
         p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
