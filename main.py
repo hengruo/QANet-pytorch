@@ -185,6 +185,20 @@ def test(model, dataset, eval_file, epoch):
     return metrics
 
 
+def print_weight(model, N, idx):
+    res = {}
+    res['char_emb'] = {"data": model.char_emb.weight.data[0:N].tolist(),
+                       "grad": model.char_emb.weight.grad[0:N].tolist()}
+    res['emb_conv2d'] = {"data": model.emb.conv2d.pointwise_conv.weight.data[0:N].tolist(),
+                         "grad": model.emb.conv2d.pointwise_conv.weight.grad[0:N].tolist()}
+    res['cqatt'] = {"data": model.cq_att.w.data[0:N].tolist(), "grad": model.cq_att.w.grad[0:N].tolist()}
+    res['enc_blks'] = {"data": model.model_enc_blks[6].fc.weight.data[0:N].tolist(),
+                       "grad": model.model_enc_blks[6].fc.weight.grad[0:N].tolist()}
+    f = open("log/W_{}.json".format(idx), "w")
+    json.dump(res, f)
+    f.close()
+
+
 def train_entry(config):
     from models import QANet
 
@@ -216,6 +230,9 @@ def train_entry(config):
     patience = 0
     for ep in range(0, N, L):
         train(model, scheduler, train_dataset, ep, L)
+        if config.print_weight:
+            print_weight(model, 5, ep + L)
+            continue
         metrics = test(model, dev_dataset, dev_eval_file, ep + L)
         dev_f1 = metrics["f1"]
         dev_em = metrics["exact_match"]
@@ -236,46 +253,6 @@ def test_entry(config):
     pass
 
 
-def dev(config):
-    from models import QANet
-
-    with open(config.word_emb_file, "r") as fh:
-        word_mat = np.array(json.load(fh), dtype=np.float32)
-    with open(config.char_emb_file, "r") as fh:
-        char_mat = np.array(json.load(fh), dtype=np.float32)
-    with open(config.dev_eval_file, "r") as fh:
-        dev_eval_file = json.load(fh)
-
-    print("Building model...")
-
-    train_dataset = SQuADDataset(config.train_record_file, config.num_steps, config.batch_size)
-    dev_dataset = SQuADDataset(config.dev_record_file, config.val_num_batches, config.batch_size)
-
-    lr = config.learning_rate
-
-    model = QANet(word_mat, char_mat).to(device)
-    # parameters = filter(lambda param: param.requires_grad, model.parameters())
-    optimizer = optim.Adam(betas=(0.8, 0.999), eps=1e-7, weight_decay=3e-7, params=model.parameters())
-    crit = lr / math.log2(1000)
-    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda ee: crit * math.log2(
-        ee + 1) if ee + 1 <= 1000 else lr)
-    L = config.checkpoint
-    NS = config.num_steps
-    for ep in range(0, NS, L):
-        train(model, scheduler, train_dataset, ep, L)
-        res = {}
-        N = 3
-        res['char_emb'] = {"data": model.char_emb.weight.data[0:N].tolist(),
-                           "grad": model.char_emb.weight.grad[0:N].tolist()}
-        res['emb_conv2d'] = {"data": model.emb.conv2d.pointwise_conv.weight.data[0:N].tolist(),
-                             "grad": model.emb.conv2d.pointwise_conv.weight.grad[0:N].tolist()}
-        res['cqatt'] = {"data": model.cq_att.w.data[0:N].tolist(), "grad": model.cq_att.w.grad[0:N].tolist()}
-        res['enc_blks'] = {"data": model.model_enc_blks[6].fc.weight.data[0:N].tolist(),
-                           "grad": model.model_enc_blks[6].fc.weight.grad[0:N].tolist()}
-        f = open("log/W_{}.json".format(ep+L), "w")
-        json.dump(res, f)
-        f.close()
-
 def main(_):
     if config.mode == "train":
         train_entry(config)
@@ -291,7 +268,8 @@ def main(_):
     elif config.mode == "test":
         test_entry(config)
     elif config.mode == "dev":
-        dev(config)
+        config.print_weight = True
+        train_entry(config)
     else:
         print("Unknown mode")
         exit(0)

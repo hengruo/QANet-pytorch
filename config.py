@@ -100,6 +100,7 @@ flags.DEFINE_integer("connector_dim", 128, "Dimension of connectors of each laye
 flags.DEFINE_integer("num_heads", 8, "Number of heads in multi-head attention")
 
 flags.DEFINE_string("train_log", "log/train.log", "Log for each checkpoint")
+flags.DEFINE_boolean("print_weight", False, "Print weights of some layers")
 
 # Extensions (Uncomment corresponding line in download.sh to download the required data)
 glove_char_file = os.path.join(home, "data", "glove", "glove.840B.300d-char.txt")
