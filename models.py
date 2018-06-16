@@ -200,12 +200,16 @@ class Pointer(nn.Module):
         self.w2 = nn.Parameter(w2)
 
     def forward(self, M1, M2, M3, mask):
-        ninf = torch.zeros_like(mask)
-        ninf.masked_fill_(ninf == mask, -float('inf'))
+        min1 = torch.zeros_like(mask)
+        min2 = torch.zeros_like(mask)
         X1 = torch.cat([M1, M2], dim=1)
         X2 = torch.cat([M1, M3], dim=1)
-        Y1 = torch.matmul(self.w1, X1) + ninf
-        Y2 = torch.matmul(self.w2, X2) + ninf
+        Y1 = torch.matmul(self.w1, X1)
+        Y2 = torch.matmul(self.w2, X2)
+        min1.masked_fill_(min1 == mask, torch.min(Y1) - 1.0)
+        min2.masked_fill_(min2 == mask, torch.min(Y2) - 1.0)
+        Y1 = Y1 * mask + min1
+        Y2 = Y2 * mask + min2
         p1 = F.log_softmax(Y1, dim=1)
         p2 = F.log_softmax(Y2, dim=1)
         return p1, p2
