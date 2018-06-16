@@ -137,7 +137,7 @@ def train(model, optimizer, dataset, start, length):
     model.train()
     losses = []
     for i in tqdm(range(start, length + start), total=length):
-        model.zero_grad()
+        optimizer.zero_grad()
         Cwid, Ccid, Qwid, Qcid, y1, y2, ids = dataset[i]
         Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
         p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
