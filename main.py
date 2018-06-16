@@ -234,6 +234,7 @@ def train_entry(config):
     unused = True
     for iter in range(0, N, L):
         train(model, optimizer, scheduler, train_dataset, iter, L)
+        print(scheduler.get_lr())
         if iter >= 1000 - 1 and unused:
             scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.9999)
             unused = False
