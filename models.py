@@ -22,8 +22,8 @@ Lq = config.ques_limit
 class PosEncoder(nn.Module):
     def __init__(self, length):
         super().__init__()
-        freqs = torch.Tensor([10000 ** (-i / D) if i % 2 == 0 else -10000 ** (-(i - 1) / D) for i in
-                              range(D)]).unsqueeze(dim=1)
+        freqs = torch.Tensor(
+            [10000 ** (-i / D) if i % 2 == 0 else -10000 ** ((1 - i) / D) for i in range(D)]).unsqueeze(dim=1)
         phases = torch.Tensor([0 if i % 2 == 0 else math.pi / 2 for i in range(D)]).unsqueeze(dim=1)
         pos = torch.arange(length).repeat(D, 1)
         self.pos_encoding = nn.Parameter(torch.sin(torch.add(torch.mul(pos, freqs), phases)).data, requires_grad=False)
@@ -115,12 +115,12 @@ class Embedding(nn.Module):
 
     def forward(self, ch_emb, wd_emb):
         ch_emb = ch_emb.permute(0, 3, 1, 2)
-        # ch_emb = F.dropout(ch_emb, p=dropout_char, training=self.training)
+        ch_emb = F.dropout(ch_emb, p=dropout_char, training=self.training)
         ch_emb = self.conv2d(ch_emb)
         ch_emb = F.relu(ch_emb)
         ch_emb, _ = torch.max(ch_emb, dim=3)
         ch_emb = ch_emb.squeeze()
-        # wd_emb = F.dropout(wd_emb, p=dropout, training=self.training)
+        wd_emb = F.dropout(wd_emb, p=dropout, training=self.training)
         wd_emb = wd_emb.transpose(1, 2)
         emb = torch.cat([ch_emb, wd_emb], dim=1)
         emb = self.conv1d(emb)
@@ -155,7 +155,7 @@ class EncoderBlock(nn.Module):
         res = out
         out = self.norm(out)
         out = self.fc(out.transpose(1, 2)).transpose(1, 2)
-        out = F.relu(out)
+        out = F.tanh(out)
         out += res
         out = F.dropout(out, p=dropout, training=self.training)
         return out
