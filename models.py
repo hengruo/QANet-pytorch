@@ -26,10 +26,10 @@ class PosEncoder(nn.Module):
             [10000 ** (-i / D) if i % 2 == 0 else -10000 ** ((1 - i) / D) for i in range(D)]).unsqueeze(dim=1)
         phases = torch.Tensor([0 if i % 2 == 0 else math.pi / 2 for i in range(D)]).unsqueeze(dim=1)
         pos = torch.arange(length).repeat(D, 1)
-        self.pos_encoding = nn.Parameter(torch.sin(torch.add(torch.mul(pos, freqs), phases)).data, requires_grad=False)
+        self.pos_encoding = torch.sin(torch.add(torch.mul(pos, freqs), phases))
 
     def forward(self, x):
-        x += self.pos_encoding
+        x = x + self.pos_encoding
         return x
 
 
@@ -71,7 +71,7 @@ class Highway(nn.Module):
 class SelfAttention(nn.Module):
     def __init__(self):
         super().__init__()
-        Wo = torch.empty(Dv * Nh, D)
+        Wo = torch.empty(D, Dv * Nh)
         Wqs = [torch.empty(D, Dk) for _ in range(Nh)]
         Wks = [torch.empty(D, Dk) for _ in range(Nh)]
         Wvs = [torch.empty(D, Dv) for _ in range(Nh)]
@@ -80,10 +80,10 @@ class SelfAttention(nn.Module):
             nn.init.kaiming_uniform_(Wqs[i])
             nn.init.kaiming_uniform_(Wks[i])
             nn.init.kaiming_uniform_(Wvs[i])
-        self.Wo = nn.Parameter(Wo.data)
-        self.Wqs = nn.ParameterList([nn.Parameter(X.data) for X in Wqs])
-        self.Wks = nn.ParameterList([nn.Parameter(X.data) for X in Wks])
-        self.Wvs = nn.ParameterList([nn.Parameter(X.data) for X in Wvs])
+        self.Wo = nn.Parameter(Wo)
+        self.Wqs = nn.ParameterList([nn.Parameter(X) for X in Wqs])
+        self.Wks = nn.ParameterList([nn.Parameter(X) for X in Wks])
+        self.Wvs = nn.ParameterList([nn.Parameter(X) for X in Wvs])
 
     def forward(self, x):
         WQs, WKs, WVs = [], [], []
@@ -144,19 +144,19 @@ class EncoderBlock(nn.Module):
             out = self.norm(out)
             out = conv(out)
             out = F.relu(out)
-            out += res
+            out = out + res
             if (i + 1) % 2 == 0:
                 out = F.dropout(out, p=dropout, training=self.training)
             res = out
             out = self.norm(out)
         out = self.self_att(out)
-        out += res
+        out = out + res
         out = F.dropout(out, p=dropout, training=self.training)
         res = out
         out = self.norm(out)
         out = self.fc(out.transpose(1, 2)).transpose(1, 2)
         out = F.tanh(out)
-        out += res
+        out = out + res
         out = F.dropout(out, p=dropout, training=self.training)
         return out
 
@@ -166,7 +166,7 @@ class CQAttention(nn.Module):
         super().__init__()
         w = torch.empty(D * 3)
         nn.init.uniform_(w, -0.5, 0.5)
-        self.w = nn.Parameter(w.data)
+        self.w = nn.Parameter(w)
 
     def forward(self, C, Q):
         ss = []
@@ -196,8 +196,8 @@ class Pointer(nn.Module):
         w2 = torch.empty(D * 2)
         nn.init.uniform_(w1, -0.5, 0.5)
         nn.init.uniform_(w2, -0.5, 0.5)
-        self.w1 = nn.Parameter(w1.data)
-        self.w2 = nn.Parameter(w2.data)
+        self.w1 = nn.Parameter(w1)
+        self.w2 = nn.Parameter(w2)
 
     def forward(self, M1, M2, M3):
         X1 = torch.cat([M1, M2], dim=1)
@@ -211,7 +211,7 @@ class QANet(nn.Module):
     def __init__(self, word_mat, char_mat):
         super().__init__()
         if config.pretrained_char:
-            self.char_emb = nn.Embedding.from_pretrained(torch.Tensor(char_mat), freeze=True)
+            self.char_emb = nn.Embedding.from_pretrained(torch.Tensor(char_mat))
         else:
             char_mat = torch.Tensor(char_mat)
             nn.init.kaiming_uniform_(char_mat)

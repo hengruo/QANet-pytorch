@@ -204,7 +204,8 @@ def train_entry(config):
 
     model = QANet(word_mat, char_mat).to(device)
     parameters = filter(lambda param: param.requires_grad, model.parameters())
-    optimizer = optim.Adam(betas=(0.8, 0.999), eps=1e-7, weight_decay=3e-7, params=parameters)
+    # optimizer = optim.Adam(betas=(0.8, 0.999), eps=1e-7, weight_decay=3e-7, params=parameters)
+    optimizer = optim.SparseAdam(betas=(0.8, 0.999), eps=1e-7, params=parameters)
     crit = lr / math.log2(1000)
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda ee: crit * math.log2(
         ee + 1) if ee + 1 <= 1000 else lr)
@@ -253,8 +254,8 @@ def dev(config):
     lr = config.learning_rate
 
     model = QANet(word_mat, char_mat).to(device)
-    parameters = filter(lambda param: param.requires_grad, model.parameters())
-    optimizer = optim.Adam(betas=(0.8, 0.999), eps=1e-7, weight_decay=3e-7, params=parameters)
+    # parameters = filter(lambda param: param.requires_grad, model.parameters())
+    optimizer = optim.Adam(betas=(0.8, 0.999), eps=1e-7, weight_decay=3e-7, params=model.parameters())
     crit = lr / math.log2(1000)
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda ee: crit * math.log2(
         ee + 1) if ee + 1 <= 1000 else lr)
@@ -281,9 +282,10 @@ def main(_):
     elif config.mode == "data":
         preproc(config)
     elif config.mode == "debug":
-        config.num_steps = 2
+        config.batch_size = 2
+        config.num_steps = 4
         config.val_num_batches = 2
-        config.checkpoint = 1
+        config.checkpoint = 2
         config.period = 1
         train_entry(config)
     elif config.mode == "test":
