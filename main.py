@@ -51,7 +51,10 @@ class SQuADDataset(Dataset):
 
     def __getitem__(self, item):
         idxs = torch.LongTensor(self.idx_map[item:item + self.batch_size])
-        res = (self.context_idxs[idxs], self.context_char_idxs[idxs], self.ques_idxs[idxs], self.ques_char_idxs[idxs],
+        res = (self.context_idxs[idxs],
+               self.context_char_idxs[idxs],
+               self.ques_idxs[idxs],
+               self.ques_char_idxs[idxs],
                self.y1s[idxs],
                self.y2s[idxs], self.ids[idxs])
         return res
@@ -146,17 +149,17 @@ def train(model, optimizer, dataset, start, length):
         Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
         p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
         y1, y2 = y1.to(device), y2.to(device)
-        loss1 = F.cross_entropy(p1, y1)
-        loss2 = F.cross_entropy(p2, y2)
+        loss1 = F.nll_loss(p1, y1)
+        loss2 = F.nll_loss(p2, y2)
         loss = loss1 + loss2
         losses.append(loss.item())
         loss.backward()
         optimizer.step()
     loss_avg = np.mean(losses)
-    print("EPOCH {:8d} loss {:8f}\n".format(i + 1, loss_avg))
+    print("ITER {:8d} loss {:8f}\n".format(i + 1, loss_avg))
 
 
-def test(model, dataset, eval_file, epoch):
+def test(model, dataset, eval_file, iter):
     model.eval()
     answer_dict = {}
     losses = []
@@ -177,11 +180,11 @@ def test(model, dataset, eval_file, epoch):
             answer_dict.update(answer_dict_)
     loss = np.mean(losses)
     metrics = evaluate(eval_file, answer_dict)
-    f = open("log/ans_{}.json".format(epoch), "w")
+    f = open("log/ans_{}.json".format(iter), "w")
     json.dump(answer_dict, f)
     f.close()
     metrics["loss"] = loss
-    print("EPOCH {:8d} loss {:8f} F1 {:8f} EM {:8f}\n".format(epoch, loss, metrics["f1"], metrics["exact_match"]))
+    print("ITER {:8d} loss {:8f} F1 {:8f} EM {:8f}\n".format(iter, loss, metrics["f1"], metrics["exact_match"]))
     return metrics
 
 
@@ -220,20 +223,19 @@ def train_entry(config):
     parameters = filter(lambda param: param.requires_grad, model.parameters())
     # optimizer = optim.Adam(betas=(0.8, 0.999), eps=1e-7, weight_decay=3e-7, params=parameters)
     optimizer = optim.SparseAdam(betas=(0.8, 0.999), eps=1e-7, params=parameters)
-    crit = lr / math.log2(1000)
-    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda ee: crit * math.log2(
-        ee + 1) if ee + 1 <= 1000 else lr)
+    cr = lr / math.log2(1000)
+    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda ee: cr * math.log2(ee + 1) if ee < 1000 else lr)
     L = config.checkpoint
     N = config.num_steps
     best_f1 = 0
     best_em = 0
     patience = 0
-    for ep in range(0, N, L):
-        train(model, scheduler, train_dataset, ep, L)
+    for iter in range(0, N, L):
+        train(model, scheduler, train_dataset, iter, L)
         if config.print_weight:
-            print_weight(model, 5, ep + L)
+            print_weight(model, 5, iter + L)
             continue
-        metrics = test(model, dev_dataset, dev_eval_file, ep + L)
+        metrics = test(model, dev_dataset, dev_eval_file, iter + L)
         dev_f1 = metrics["f1"]
         dev_em = metrics["exact_match"]
         if dev_f1 < best_f1 and dev_em < best_em:
@@ -245,7 +247,7 @@ def train_entry(config):
             best_f1 = max(best_f1, dev_f1)
             best_em = max(best_em, dev_em)
 
-        fn = os.path.join(config.save_dir, "model_{}.ckpt".format(ep))
+        fn = os.path.join(config.save_dir, "model_{}.ckpt".format(iter))
         torch.save(model, fn)
 
 
