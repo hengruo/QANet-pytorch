@@ -273,9 +273,6 @@ def main(_):
         train_entry(config)
     elif config.mode == "test":
         test_entry(config)
-    elif config.mode == "dev":
-        config.print_weight = True
-        train_entry(config)
     else:
         print("Unknown mode")
         exit(0)
