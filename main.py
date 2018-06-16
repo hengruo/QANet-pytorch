@@ -136,15 +136,11 @@ def metric_max_over_ground_truths(metric_fn, prediction, ground_truths):
     return max(scores_for_ground_truths)
 
 
-def train(model, optimizer, dataset, start, length):
+def train(model, optimizer, scheduler, dataset, start, length):
     model.train()
     losses = []
-    if isinstance(optimizer, optim.lr_scheduler.LambdaLR):
-        optimizer_ = optimizer.optimizer
-    else:
-        optimizer_ = optimizer
     for i in tqdm(range(start, length + start), total=length):
-        optimizer_.zero_grad()
+        optimizer.zero_grad()
         Cwid, Ccid, Qwid, Qcid, y1, y2, ids = dataset[i]
         Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
         p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
@@ -155,8 +151,9 @@ def train(model, optimizer, dataset, start, length):
         losses.append(loss.item())
         loss.backward()
         optimizer.step()
+        scheduler.step()
     loss_avg = np.mean(losses)
-    print("ITER {:8d} loss {:8f}\n".format(i + 1, loss_avg))
+    print("STEP {:8d} loss {:8f}\n".format(i + 1, loss_avg))
 
 
 def test(model, dataset, eval_file, iter):
@@ -184,7 +181,7 @@ def test(model, dataset, eval_file, iter):
     json.dump(answer_dict, f)
     f.close()
     metrics["loss"] = loss
-    print("ITER {:8d} loss {:8f} F1 {:8f} EM {:8f}\n".format(iter, loss, metrics["f1"], metrics["exact_match"]))
+    print("STEP {:8d} loss {:8f} F1 {:8f} EM {:8f}\n".format(iter, loss, metrics["f1"], metrics["exact_match"]))
     return metrics
 
 
@@ -197,6 +194,8 @@ def print_weight(model, N, idx):
     res['cqatt'] = {"data": model.cq_att.w.data[0:N].tolist(), "grad": model.cq_att.w.grad[0:N].tolist()}
     res['enc_blks'] = {"data": model.model_enc_blks[6].fc.weight.data[0:N].tolist(),
                        "grad": model.model_enc_blks[6].fc.weight.grad[0:N].tolist()}
+    res['point1'] = {"data": model.out.w1.data[0:N].tolist(), "grad": model.out.w1.grad[0:N].tolist()}
+    res['point2'] = {"data": model.out.w2.data[0:N].tolist(), "grad": model.out.w2.grad[0:N].tolist()}
     f = open("log/W_{}.json".format(idx), "w")
     json.dump(res, f)
     f.close()
@@ -221,8 +220,8 @@ def train_entry(config):
 
     model = QANet(word_mat, char_mat).to(device)
     parameters = filter(lambda param: param.requires_grad, model.parameters())
-    # optimizer = optim.Adam(betas=(0.8, 0.999), eps=1e-7, weight_decay=3e-7, params=parameters)
-    optimizer = optim.SparseAdam(betas=(0.8, 0.999), eps=1e-7, params=parameters)
+    optimizer = optim.Adam(betas=(0.8, 0.999), eps=1e-7, weight_decay=3e-7, params=parameters)
+    # optimizer = optim.SparseAdam(betas=(0.8, 0.999), eps=1e-7, params=parameters)
     cr = lr / math.log2(1000)
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda ee: cr * math.log2(ee + 1) if ee < 1000 else lr)
     L = config.checkpoint
@@ -230,8 +229,12 @@ def train_entry(config):
     best_f1 = 0
     best_em = 0
     patience = 0
+    unused = True
     for iter in range(0, N, L):
-        train(model, scheduler, train_dataset, iter, L)
+        train(model, optimizer, scheduler, train_dataset, iter, L)
+        if iter > 1000 and unused:
+            scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.9999)
+            unused = False
         if config.print_weight:
             print_weight(model, 5, iter + L)
             continue
@@ -261,8 +264,9 @@ def main(_):
     elif config.mode == "data":
         preproc(config)
     elif config.mode == "debug":
+        config.print_weight = True
         config.batch_size = 2
-        config.num_steps = 4
+        config.num_steps = 32
         config.val_num_batches = 2
         config.checkpoint = 2
         config.period = 1

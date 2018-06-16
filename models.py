@@ -62,7 +62,7 @@ class Highway(nn.Module):
         x = x.transpose(1, 2)
         for i in range(self.n):
             gate = F.sigmoid(self.gate[i](x))
-            nonlinear = F.tanh(self.linear[i](x))
+            nonlinear = F.relu(self.linear[i](x))
             x = gate * nonlinear + (1 - gate) * x
         x = x.transpose(1, 2)
         return x
@@ -155,7 +155,7 @@ class EncoderBlock(nn.Module):
         res = out
         out = self.norm(out)
         out = self.fc(out.transpose(1, 2)).transpose(1, 2)
-        out = F.tanh(out)
+        out = F.relu(out)
         out = out + res
         out = F.dropout(out, p=dropout, training=self.training)
         return out
@@ -200,16 +200,16 @@ class Pointer(nn.Module):
         self.w2 = nn.Parameter(w2)
 
     def forward(self, M1, M2, M3, mask):
-        min1 = torch.zeros_like(mask)
-        min2 = torch.zeros_like(mask)
         X1 = torch.cat([M1, M2], dim=1)
         X2 = torch.cat([M1, M3], dim=1)
-        Y1 = torch.matmul(self.w1, X1)
-        Y2 = torch.matmul(self.w2, X2)
-        min1.masked_fill_(min1 == mask, torch.min(Y1) - 1.0)
-        min2.masked_fill_(min2 == mask, torch.min(Y2) - 1.0)
-        Y1 = Y1 * mask + min1
-        Y2 = Y2 * mask + min2
+        Y1 = torch.matmul(self.w1, X1) * mask
+        Y2 = torch.matmul(self.w2, X2) * mask
+        min1, _ = torch.min(Y1, 1, keepdim=True)
+        min2, _ = torch.min(Y2, 1, keepdim=True)
+        max1, _ = torch.max(Y1, 1, keepdim=True)
+        max2, _ = torch.max(Y2, 1, keepdim=True)
+        Y1 = (Y1 - min1) / (max1 - min1) * mask
+        Y2 = (Y2 - min2) / (max2 - min2) * mask
         p1 = F.log_softmax(Y1, dim=1)
         p2 = F.log_softmax(Y2, dim=1)
         return p1, p2
