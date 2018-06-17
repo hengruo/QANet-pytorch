@@ -152,7 +152,6 @@ def train(model, optimizer, scheduler, dataset, start, length):
         loss.backward()
         optimizer.step()
         scheduler.step()
-        print(scheduler.get_lr())
     loss_avg = np.mean(losses)
     print("STEP {:8d} loss {:8f}\n".format(i + 1, loss_avg))
 
@@ -219,13 +218,15 @@ def train_entry(config):
 
     lr = config.learning_rate
     base_lr = 1.0
+    lr_warm_up_num = config.lr_warm_up_num
 
     model = QANet(word_mat, char_mat).to(device)
     parameters = filter(lambda param: param.requires_grad, model.parameters())
     optimizer = optim.Adam(lr=base_lr, betas=(0.8, 0.999), eps=1e-7, weight_decay=3e-7, params=parameters)
     # optimizer = optim.SparseAdam(lr=lr, betas=(0.8, 0.999), eps=1e-7, params=parameters)
-    cr = lr / math.log2(1000)
-    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda ee: cr * math.log2(ee + 1) if ee < 1000 else lr)
+    cr = lr / math.log2(lr_warm_up_num)
+    scheduler = optim.lr_scheduler.LambdaLR(optimizer,
+                                            lr_lambda=lambda ee: cr * math.log2(ee + 1) if ee < lr_warm_up_num else lr)
     L = config.checkpoint
     N = config.num_steps
     best_f1 = 0
@@ -234,13 +235,14 @@ def train_entry(config):
     unused = True
     for iter in range(0, N, L):
         train(model, optimizer, scheduler, train_dataset, iter, L)
-        print(scheduler.get_lr())
-        if iter >= 1000 - 1 and unused:
+        test(model, dev_dataset, dev_eval_file, iter)
+        if iter + L >= lr_warm_up_num - 1 and unused:
+            optimizer.param_groups[0]['initial_lr'] = lr
             scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.9999)
             unused = False
         if config.print_weight:
             print_weight(model, 5, iter + L)
-            continue
+        print(scheduler.get_lr())
         metrics = test(model, dev_dataset, dev_eval_file, iter + L)
         dev_f1 = metrics["f1"]
         dev_em = metrics["exact_match"]
