@@ -16,7 +16,7 @@ Now it can reach EM/F1 = 70.5/77.2 after 20 epoches for about 20 hours on one 10
 Python 3.6 & PyTorch 0.4
 
 1. Install pytorch 0.4 for Python 3.6+
-2. Run `pip install spacy tqdm ujson requests`
+2. Run `pip install cython spacy tqdm ujson requests`
 3. Run `download.sh`
 4. Run `python main.py --mode data`
 5. Run `python main.py --mode train`
