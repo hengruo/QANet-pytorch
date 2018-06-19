@@ -86,10 +86,8 @@ def evaluate(eval_file, answer_dict):
         total += 1
         ground_truths = eval_file[key]["answers"]
         prediction = value
-        exact_match += metric_max_over_ground_truths(
-            exact_match_score, prediction, ground_truths)
-        f1 += metric_max_over_ground_truths(f1_score,
-                                            prediction, ground_truths)
+        exact_match += metric_max_over_ground_truths(exact_match_score, prediction, ground_truths)
+        f1 += metric_max_over_ground_truths(f1_score, prediction, ground_truths)
     exact_match = 100.0 * exact_match / total
     f1 = 100.0 * f1 / total
     return {'exact_match': exact_match, 'f1': f1}
@@ -218,7 +216,7 @@ def train_entry(config):
     print("Building model...")
 
     train_dataset = SQuADDataset(config.train_record_file, config.num_steps, config.batch_size)
-    dev_dataset = SQuADDataset(config.dev_record_file, -1, config.batch_size)
+    dev_dataset = SQuADDataset(config.dev_record_file, config.val_num_batches, config.batch_size)
 
     lr = config.learning_rate
     base_lr = 1.0

@@ -206,18 +206,18 @@ class Pointer(nn.Module):
     def forward(self, M1, M2, M3, mask):
         X1 = torch.cat([M1, M2], dim=1)
         X2 = torch.cat([M1, M3], dim=1)
-        Y1 = torch.matmul(self.w1, X1)
-        Y2 = torch.matmul(self.w2, X2)
-        min1, _ = torch.min(Y1, 1, keepdim=True)
-        min2, _ = torch.min(Y2, 1, keepdim=True)
-        Y1 = (Y1 - min1 + 1.0) * mask
-        Y2 = (Y2 - min2 + 1.0) * mask
-        p1 = F.log_softmax(Y1, dim=1)
-        p2 = F.log_softmax(Y2, dim=1)
         # Y1 = torch.matmul(self.w1, X1)
         # Y2 = torch.matmul(self.w2, X2)
-        # p1 = F.softmax(Y1, dim=1) * mask
-        # p2 = F.softmax(Y2, dim=1) * mask
+        # min1, _ = torch.min(Y1, 1, keepdim=True)
+        # min2, _ = torch.min(Y2, 1, keepdim=True)
+        # Y1 = (Y1 - min1 + 1.0) * mask
+        # Y2 = (Y2 - min2 + 1.0) * mask
+        # p1 = F.log_softmax(Y1, dim=1)
+        # p2 = F.log_softmax(Y2, dim=1)
+        Y1 = torch.matmul(self.w1, X1)
+        Y2 = torch.matmul(self.w2, X2)
+        p1 = F.softmax(Y1, dim=1) * mask
+        p2 = F.softmax(Y2, dim=1) * mask
         return p1, p2
 
 
