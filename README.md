@@ -22,18 +22,19 @@ Python 3.6 & PyTorch 0.4
 5. Run `python main.py --mode train`
 
 ## Structure
-dataset.py: download dataset and parse.
+preproc.py: downloads dataset and builds inputs.
 
 main.py: program entry.
 
 models.py: QANet structure.
 
+config.py: configurations.
+
 ## Differences from the paper
 
 1. The paper doesn't mention which activation function they used. I use relu.
 2. I don't set the embedding of `<UNK>` trainable.
-3. The connector between embedding layers and embedding encoders may be different from the implementation of Google, since the description in the paper is inconsistent (residual block can't be used because the dimensions of input and output are different) and they don't say how they implement it.
-4. Max passage length is 300 instead of 400 since I don't have much GPU memory.
+3. The connector between embedding layers and embedding encoders may be different from the implementation of Google, since the description in the paper is inconsistent (residual block can't be used because the dimensions of input and output are different) and they don't say how they implemented it.
 
 ## TODO
 
@@ -43,5 +44,5 @@ models.py: QANet structure.
 - [ ] Ablation analysis
 
 ## Contributors
-1. [InitialBug](https://github.com/InitialBug): find two bugs: 1. positional encodings require gradients; 2. wrong weight sharing among encoders.
-2. [linthieda](https://github.com/linthieda): fix one issue about dependencies.
+1. [InitialBug](https://github.com/InitialBug): found two bugs: 1. positional encodings require gradients; 2. wrong weight sharing among encoders.
+2. [linthieda](https://github.com/linthieda): fixed one issue about dependencies and offered computing resources.
