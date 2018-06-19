@@ -43,5 +43,5 @@ models.py: QANet structure.
 - [ ] Ablation analysis
 
 ## Contributors
-[InitialBug](https://github.com/InitialBug): find two bugs: 1. positional encodings require gradients; 2. wrong weight sharing among encoders.
-[linthieda](https://github.com/linthieda): fix one issue about dependencies.
+1. [InitialBug](https://github.com/InitialBug): find two bugs: 1. positional encodings require gradients; 2. wrong weight sharing among encoders.
+2. [linthieda](https://github.com/linthieda): fix one issue about dependencies.
