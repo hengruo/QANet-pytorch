@@ -1,30 +1,24 @@
 # QANet-pytorch
 
-## NOTICE
-This repo is under re-implementation. Due to frequent modification, this code may not run normally.
+## Introduction
+
+An implementation of [QANet](https://arxiv.org/pdf/1804.09541.pdf) with PyTorch, using SQuAD 1.1. 
 
 Any contributions are welcome!
 
-## Introduction
-
-An implementation of [QANet](https://arxiv.org/pdf/1804.09541.pdf) with PyTorch.
-
-Now it can reach EM/F1 = 70.5/77.2 after 20 epoches for about 20 hours on one 1080Ti card.  
-
 ## Usage
 
-Python 3.6 & PyTorch 0.4
-
 1. Install pytorch 0.4 for Python 3.6+
-2. Run `pip install cython spacy tqdm ujson requests`
-3. Run `download.sh`
-4. Run `python main.py --mode data`
-5. Run `python main.py --mode train`
+2. Run `pip install cython spacy tqdm ujson`
+3. Run `download.sh` to download the dataset.
+4. Run `python main.py --mode data` to build tensors from the raw dataset.
+5. Run `python main.py --mode train` to train the model. After training, `log/model.pt` will be generated.
+6. Run `python main.py --mode test` to test an pretrained model. Default model file is `log/model.pt`
 
 ## Structure
-preproc.py: downloads dataset and builds inputs.
+preproc.py: downloads dataset and builds input tensors.
 
-main.py: program entry.
+main.py: program entry; functions about training and testing.
 
 models.py: QANet structure.
 
@@ -41,8 +35,9 @@ config.py: configurations.
 - [x] Reduce memory usage
 - [ ] Performance analysis
 - [ ] Reach state-of-art scroes of the original paper
+- [ ] Test on SQuAD 2.0
 - [ ] Ablation analysis
 
 ## Contributors
-1. [InitialBug](https://github.com/InitialBug): found two bugs: 1. positional encodings require gradients; 2. wrong weight sharing among encoders.
+1. [InitialBug](https://github.com/InitialBug): found two bugs: (1). positional encodings require gradients; (2). wrong weight sharing among encoders.
 2. [linthieda](https://github.com/linthieda): fixed one issue about dependencies and offered computing resources.

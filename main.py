@@ -259,7 +259,7 @@ def train_entry(config):
             best_f1 = max(best_f1, dev_f1)
             best_em = max(best_em, dev_em)
 
-        fn = os.path.join(config.save_dir, "model.ckpt".format(iter+L))
+        fn = os.path.join(config.save_dir, "model.pt".format(iter+L))
         torch.save(model, fn)
 
 
