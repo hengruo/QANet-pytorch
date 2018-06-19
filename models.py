@@ -77,9 +77,9 @@ class SelfAttention(nn.Module):
         Wvs = [torch.empty(D, Dv) for _ in range(Nh)]
         nn.init.kaiming_uniform_(Wo)
         for i in range(Nh):
-            nn.init.kaiming_uniform_(Wqs[i])
-            nn.init.kaiming_uniform_(Wks[i])
-            nn.init.kaiming_uniform_(Wvs[i])
+            nn.init.xavier_uniform_(Wqs[i])
+            nn.init.xavier_uniform_(Wks[i])
+            nn.init.xavier_uniform_(Wvs[i])
         self.Wo = nn.Parameter(Wo)
         self.Wqs = nn.ParameterList([nn.Parameter(X) for X in Wqs])
         self.Wks = nn.ParameterList([nn.Parameter(X) for X in Wks])
@@ -136,6 +136,7 @@ class EncoderBlock(nn.Module):
         self.fc = nn.Linear(ch_num, ch_num, bias=True)
         self.pos = PosEncoder(length)
         self.norm = nn.LayerNorm([D, length])
+        self.L = conv_num
 
     def forward(self, x):
         out = self.pos(x)
@@ -146,7 +147,8 @@ class EncoderBlock(nn.Module):
             out = F.relu(out)
             out = out + res
             if (i + 1) % 2 == 0:
-                out = F.dropout(out, p=dropout, training=self.training)
+                p_drop = dropout * (i+1) / self.L
+                out = F.dropout(out, p=p_drop, training=self.training)
             res = out
             out = self.norm(out)
         out = self.self_att(out)
@@ -165,7 +167,8 @@ class CQAttention(nn.Module):
     def __init__(self):
         super().__init__()
         w = torch.empty(D * 3)
-        nn.init.uniform_(w, -0.5, 0.5)
+        lim = 1/D
+        nn.init.uniform_(w, -math.sqrt(lim), math.sqrt(lim))
         self.w = nn.Parameter(w)
 
     def forward(self, C, Q):
@@ -194,8 +197,9 @@ class Pointer(nn.Module):
         super().__init__()
         w1 = torch.empty(D * 2)
         w2 = torch.empty(D * 2)
-        nn.init.uniform_(w1, -0.5, 0.5)
-        nn.init.uniform_(w2, -0.5, 0.5)
+        lim = 3/(2*D)
+        nn.init.uniform_(w1, -math.sqrt(lim), math.sqrt(lim))
+        nn.init.uniform_(w2, -math.sqrt(lim), math.sqrt(lim))
         self.w1 = nn.Parameter(w1)
         self.w2 = nn.Parameter(w2)
 
@@ -222,7 +226,7 @@ class QANet(nn.Module):
             self.char_emb = nn.Embedding.from_pretrained(torch.Tensor(char_mat))
         else:
             char_mat = torch.Tensor(char_mat)
-            nn.init.kaiming_uniform_(char_mat)
+            # nn.init.kaiming_uniform_(char_mat)
             self.char_emb = nn.Embedding.from_pretrained(char_mat, freeze=False)
         self.word_emb = nn.Embedding.from_pretrained(torch.Tensor(word_mat))
         self.emb = Embedding()
