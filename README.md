@@ -37,7 +37,7 @@ models.py: QANet structure.
 
 ## TODO
 
-- [ ] Reduce memory usage
+- [x] Reduce memory usage
 - [ ] Performance analysis
 - [ ] Reach state-of-art scroes of the original paper
 - [ ] Ablation analysis
