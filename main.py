@@ -259,13 +259,17 @@ def train_entry(config):
             best_f1 = max(best_f1, dev_f1)
             best_em = max(best_em, dev_em)
 
-        fn = os.path.join(config.save_dir, "model.ckpt".format(iter+L))
+        fn = os.path.join(config.save_dir, "model.ckpt")
         torch.save(model, fn)
 
 
 def test_entry(config):
-    pass
-
+    fn = os.path.join(config.save_dir, "model.ckpt")
+    model = torch.load(fn)
+    with open(config.dev_eval_file, "r") as fh:
+        dev_eval_file = json.load(fh)
+    dev_dataset = SQuADDataset(config.dev_record_file, -1, config.batch_size)
+    test(model, dev_dataset, dev_eval_file)
 
 def main(_):
     if config.mode == "train":
