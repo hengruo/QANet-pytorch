@@ -247,7 +247,7 @@ def train_entry(config):
             unused = False
         if config.print_weight:
             print_weight(model, 5, iter + L)
-        print(scheduler.get_lr())
+        print("Learning rate: {}".format(scheduler.get_lr()))
         dev_f1 = metrics["f1"]
         dev_em = metrics["exact_match"]
         if dev_f1 < best_f1 and dev_em < best_em:
