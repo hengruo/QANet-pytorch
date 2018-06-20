@@ -9,7 +9,7 @@ Any contributions are welcome!
 ## Usage
 
 1. Install pytorch 0.4 for Python 3.6+
-2. Run `pip install cython spacy tqdm ujson absl-py`
+2. Run `pip install -r requirements.txt` to install python dependencies.
 3. Run `download.sh` to download the dataset.
 4. Run `python main.py --mode data` to build tensors from the raw dataset.
 5. Run `python main.py --mode train` to train the model. After training, `log/model.pt` will be generated.
