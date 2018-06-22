@@ -18,6 +18,9 @@ D_cq_att = D * 4
 Lc = config.para_limit
 Lq = config.ques_limit
 
+def mask_logits(target, mask):
+    v = -1e30
+    return target + (1 - mask) * v
 
 class PosEncoder(nn.Module):
     def __init__(self, length):
@@ -85,10 +88,11 @@ class SelfAttention(nn.Module):
         self.Wks = nn.ParameterList([nn.Parameter(X) for X in Wks])
         self.Wvs = nn.ParameterList([nn.Parameter(X) for X in Wvs])
 
-    def forward(self, x):
+    def forward(self, x, mask):
         WQs, WKs, WVs = [], [], []
         sqrt_dk_inv = 1 / math.sqrt(Dk)
         x = x.transpose(1, 2)
+        mask = mask.unsqueeze(2)
         for i in range(Nh):
             WQs.append(torch.matmul(x, self.Wqs[i]))
             WKs.append(torch.matmul(x, self.Wks[i]))
@@ -98,6 +102,7 @@ class SelfAttention(nn.Module):
             out = torch.bmm(WQs[i], WKs[i].transpose(1, 2))
             out = torch.mul(out, sqrt_dk_inv)
             # not sure... I think `dim` should be 1 since it weighted each column of `WVs[i]`
+            out = mask_logits(out, mask)
             out = F.softmax(out, dim=1)
             headi = torch.bmm(out, WVs[i])
             heads.append(headi)
@@ -138,7 +143,7 @@ class EncoderBlock(nn.Module):
         self.norm = nn.LayerNorm([D, length])
         self.L = conv_num
 
-    def forward(self, x):
+    def forward(self, x, mask):
         out = self.pos(x)
         res = out
         for i, conv in enumerate(self.convs):
@@ -151,7 +156,7 @@ class EncoderBlock(nn.Module):
                 out = F.dropout(out, p=p_drop, training=self.training)
             res = out
             out = self.norm(out)
-        out = self.self_att(out)
+        out = self.self_att(out, mask)
         out = out + res
         out = F.dropout(out, p=dropout, training=self.training)
         res = out
@@ -171,10 +176,12 @@ class CQAttention(nn.Module):
         nn.init.uniform_(w, -math.sqrt(lim), math.sqrt(lim))
         self.w = nn.Parameter(w)
 
-    def forward(self, C, Q):
+    def forward(self, C, Q, cmask, qmask):
         ss = []
         C = C.transpose(1, 2)
         Q = Q.transpose(1, 2)
+        cmask = cmask.unsqueeze(2)
+        qmask = qmask.unsqueeze(1)
         for i in range(Lq):
             q = Q[:, i, :].unsqueeze(1)
             QCi = torch.mul(q, C)
@@ -183,8 +190,8 @@ class CQAttention(nn.Module):
             Si = torch.matmul(Xi, self.w).unsqueeze(2)
             ss.append(Si)
         S = torch.cat(ss, dim=2)
-        S1 = F.softmax(S, dim=2)
-        S2 = F.softmax(S, dim=1)
+        S1 = F.softmax(mask_logits(S, qmask), dim=2)
+        S2 = F.softmax(mask_logits(S, cmask), dim=1)
         A = torch.bmm(S1, Q)
         B = torch.bmm(torch.bmm(S1, S2.transpose(1, 2)), C)
         out = torch.cat([C, A, torch.mul(C, A), torch.mul(C, B)], dim=2)
@@ -208,16 +215,10 @@ class Pointer(nn.Module):
         X2 = torch.cat([M1, M3], dim=1)
         Y1 = torch.matmul(self.w1, X1)
         Y2 = torch.matmul(self.w2, X2)
-        min1, _ = torch.min(Y1, 1, keepdim=True)
-        min2, _ = torch.min(Y2, 1, keepdim=True)
-        Y1 = (Y1 - min1 + 1.0) * mask
-        Y2 = (Y2 - min2 + 1.0) * mask
+        Y1 = mask_logits(Y1, mask)
+        Y2 = mask_logits(Y2, mask)
         p1 = F.log_softmax(Y1, dim=1)
         p2 = F.log_softmax(Y2, dim=1)
-        # Y1 = torch.matmul(self.w1, X1)
-        # Y2 = torch.matmul(self.w2, X2)
-        # p1 = F.softmax(Y1, dim=1) * mask
-        # p2 = F.softmax(Y2, dim=1) * mask
         return p1, p2
 
 
@@ -237,20 +238,23 @@ class QANet(nn.Module):
         self.cq_att = CQAttention()
         self.cq_resizer = DepthwiseSeparableConv(D * 4, D, 5)
         enc_blk = EncoderBlock(conv_num=2, ch_num=D, k=5, length=Lc)
-        self.model_enc_blks = nn.Sequential(*([enc_blk] * 7))
+        self.model_enc_blks = nn.ModuleList([enc_blk] * 7)
         self.out = Pointer()
 
     def forward(self, Cwid, Ccid, Qwid, Qcid):
-        mask = (torch.zeros_like(Cwid) != Cwid).float()
+        cmask = (torch.zeros_like(Cwid) != Cwid).float()
+        qmask = (torch.zeros_like(Qwid) != Qwid).float()
         Cw, Cc = self.word_emb(Cwid), self.char_emb(Ccid)
         Qw, Qc = self.word_emb(Qwid), self.char_emb(Qcid)
         C, Q = self.emb(Cc, Cw), self.emb(Qc, Qw)
-        Ce = self.c_emb_enc(C)
-        Qe = self.q_emb_enc(Q)
-        X = self.cq_att(Ce, Qe)
-        M0 = self.cq_resizer(X)
-        M1 = self.model_enc_blks(M0)
-        M2 = self.model_enc_blks(M1)
-        M3 = self.model_enc_blks(M2)
-        p1, p2 = self.out(M1, M2, M3, mask)
+        Ce = self.c_emb_enc(C, cmask)
+        Qe = self.q_emb_enc(Q, qmask)
+        X = self.cq_att(Ce, Qe, cmask, qmask)
+        M1 = self.cq_resizer(X)
+        for enc in self.model_enc_blks: M1 = enc(M1, cmask)
+        M2 = M1
+        for enc in self.model_enc_blks: M2 = enc(M2, cmask)
+        M3 = M2
+        for enc in self.model_enc_blks: M3 = enc(M3, cmask)
+        p1, p2 = self.out(M1, M2, M3, cmask)
         return p1, p2
