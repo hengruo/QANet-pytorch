@@ -19,8 +19,7 @@ Lc = config.para_limit
 Lq = config.ques_limit
 
 def mask_logits(target, mask):
-    v = -1e30
-    return target + (1 - mask) * v
+    return target * mask + (1 - mask) * (-1e30)
 
 class PosEncoder(nn.Module):
     def __init__(self, length):
@@ -92,7 +91,8 @@ class SelfAttention(nn.Module):
         WQs, WKs, WVs = [], [], []
         sqrt_dk_inv = 1 / math.sqrt(Dk)
         x = x.transpose(1, 2)
-        mask = mask.unsqueeze(2)
+        hmask = mask.unsqueeze(1)
+        vmask = mask.unsqueeze(2)
         for i in range(Nh):
             WQs.append(torch.matmul(x, self.Wqs[i]))
             WKs.append(torch.matmul(x, self.Wks[i]))
@@ -101,9 +101,9 @@ class SelfAttention(nn.Module):
         for i in range(Nh):
             out = torch.bmm(WQs[i], WKs[i].transpose(1, 2))
             out = torch.mul(out, sqrt_dk_inv)
-            # not sure... I think `dim` should be 1 since it weighted each column of `WVs[i]`
-            out = mask_logits(out, mask)
-            out = F.softmax(out, dim=1)
+            # not sure... I think `dim` should be 2 since it weighted each column of `WVs[i]`
+            out = mask_logits(out, hmask)
+            out = F.softmax(out, dim=2) * vmask
             headi = torch.bmm(out, WVs[i])
             heads.append(headi)
         head = torch.cat(heads, dim=2)
