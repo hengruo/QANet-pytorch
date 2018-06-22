@@ -187,22 +187,6 @@ def test(model, dataset, eval_file):
     return metrics
 
 
-def print_weight(model, N, idx):
-    res = {}
-    res['char_emb'] = {"data": model.char_emb.weight.data[0:N].tolist(),
-                       "grad": model.char_emb.weight.grad[0:N].tolist()}
-    res['emb_conv2d'] = {"data": model.emb.conv2d.pointwise_conv.weight.data[0:N].tolist(),
-                         "grad": model.emb.conv2d.pointwise_conv.weight.grad[0:N].tolist()}
-    res['cqatt'] = {"data": model.cq_att.w.data[0:N].tolist(), "grad": model.cq_att.w.grad[0:N].tolist()}
-    res['enc_blks'] = {"data": model.model_enc_blks[6].fc.weight.data[0:N].tolist(),
-                       "grad": model.model_enc_blks[6].fc.weight.grad[0:N].tolist()}
-    res['point1'] = {"data": model.out.w1.data[0:N].tolist(), "grad": model.out.w1.grad[0:N].tolist()}
-    res['point2'] = {"data": model.out.w2.data[0:N].tolist(), "grad": model.out.w2.grad[0:N].tolist()}
-    f = open("log/W_{}.json".format(idx), "w")
-    json.dump(res, f)
-    f.close()
-
-
 def train_entry(config):
     from models import QANet
 
@@ -243,8 +227,6 @@ def train_entry(config):
             optimizer.param_groups[0]['initial_lr'] = lr
             scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.9999)
             unused = False
-        if config.debug:
-            print_weight(model, 5, iter + L)
         print("Learning rate: {}".format(scheduler.get_lr()))
         dev_f1 = metrics["f1"]
         dev_em = metrics["exact_match"]
@@ -276,7 +258,6 @@ def main(_):
     elif config.mode == "data":
         preproc(config)
     elif config.mode == "debug":
-        config.debug = True
         config.batch_size = 2
         config.num_steps = 32
         config.val_num_batches = 2
