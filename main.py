@@ -144,9 +144,9 @@ def train(model, optimizer, scheduler, dataset, start, length):
         Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
         p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
         y1, y2 = y1.to(device), y2.to(device)
-        loss1 = F.nll_loss(p1, y1)
-        loss2 = F.nll_loss(p2, y2)
-        loss = loss1 + loss2
+        loss1 = F.nll_loss(p1, y1, size_average=True)
+        loss2 = F.nll_loss(p2, y2, size_average=True)
+        loss = (loss1 + loss2) / 2
         losses.append(loss.item())
         loss.backward()
         optimizer.step()
@@ -166,9 +166,9 @@ def test(model, dataset, eval_file):
             Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
             p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
             y1, y2 = y1.to(device), y2.to(device)
-            loss1 = F.nll_loss(p1, y1)
-            loss2 = F.nll_loss(p2, y2)
-            loss = loss1 + loss2
+            loss1 = F.nll_loss(p1, y1, size_average=True)
+            loss2 = F.nll_loss(p2, y2, size_average=True)
+            loss = (loss1 + loss2) / 2
             losses.append(loss.item())
             yp1 = torch.argmax(p1, 1)
             yp2 = torch.argmax(p2, 1)
