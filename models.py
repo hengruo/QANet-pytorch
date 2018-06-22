@@ -140,6 +140,7 @@ class EncoderBlock(nn.Module):
         self.self_att = SelfAttention()
         self.fc = nn.Linear(ch_num, ch_num, bias=True)
         self.pos = PosEncoder(length)
+        self.normb = nn.LayerNorm([D, length])
         self.norms = nn.ModuleList([nn.LayerNorm([D, length]) for _ in range(conv_num)])
         self.norme = nn.LayerNorm([D, length])
         self.L = conv_num
@@ -147,8 +148,8 @@ class EncoderBlock(nn.Module):
     def forward(self, x, mask):
         out = self.pos(x)
         res = out
+        out = self.normb(out)
         for i, conv in enumerate(self.convs):
-            out = self.norms[i](out)
             out = conv(out)
             out = F.relu(out)
             out = out + res
