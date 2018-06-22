@@ -140,14 +140,15 @@ class EncoderBlock(nn.Module):
         self.self_att = SelfAttention()
         self.fc = nn.Linear(ch_num, ch_num, bias=True)
         self.pos = PosEncoder(length)
-        self.norm = nn.LayerNorm([D, length])
+        self.norms = nn.ModuleList([nn.LayerNorm([D, length]) for _ in range(conv_num)])
+        self.norme = nn.LayerNorm([D, length])
         self.L = conv_num
 
     def forward(self, x, mask):
         out = self.pos(x)
         res = out
         for i, conv in enumerate(self.convs):
-            out = self.norm(out)
+            out = self.norms[i](out)
             out = conv(out)
             out = F.relu(out)
             out = out + res
@@ -155,12 +156,12 @@ class EncoderBlock(nn.Module):
                 p_drop = dropout * (i+1) / self.L
                 out = F.dropout(out, p=p_drop, training=self.training)
             res = out
-            out = self.norm(out)
+            out = self.norms[i](out)
         out = self.self_att(out, mask)
         out = out + res
         out = F.dropout(out, p=dropout, training=self.training)
         res = out
-        out = self.norm(out)
+        out = self.norme(out)
         out = self.fc(out.transpose(1, 2)).transpose(1, 2)
         out = F.relu(out)
         out = out + res
