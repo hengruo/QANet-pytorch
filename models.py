@@ -103,7 +103,7 @@ class SelfAttention(nn.Module):
             out = torch.mul(out, sqrt_dk_inv)
             # not sure... I think `dim` should be 2 since it weighted each column of `WVs[i]`
             out = mask_logits(out, hmask)
-            out = F.softmax(out, dim=2) * vmask
+            out = F.softmax(out, dim=2)
             headi = torch.bmm(out, WVs[i])
             heads.append(headi)
         head = torch.cat(heads, dim=2)
