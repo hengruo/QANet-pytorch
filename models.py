@@ -18,8 +18,10 @@ D_cq_att = D * 4
 Lc = config.para_limit
 Lq = config.ques_limit
 
+
 def mask_logits(target, mask):
     return target * mask + (1 - mask) * (-1e30)
+
 
 class PosEncoder(nn.Module):
     def __init__(self, length):
@@ -154,7 +156,7 @@ class EncoderBlock(nn.Module):
             out = F.relu(out)
             out = out + res
             if (i + 1) % 2 == 0:
-                p_drop = dropout * (i+1) / self.L
+                p_drop = dropout * (i + 1) / self.L
                 out = F.dropout(out, p=p_drop, training=self.training)
             res = out
             out = self.norms[i](out)
@@ -174,7 +176,7 @@ class CQAttention(nn.Module):
     def __init__(self):
         super().__init__()
         w = torch.empty(D * 3)
-        lim = 1/D
+        lim = 1 / D
         nn.init.uniform_(w, -math.sqrt(lim), math.sqrt(lim))
         self.w = nn.Parameter(w)
 
@@ -206,7 +208,7 @@ class Pointer(nn.Module):
         super().__init__()
         w1 = torch.empty(D * 2)
         w2 = torch.empty(D * 2)
-        lim = 3/(2*D)
+        lim = 3 / (2 * D)
         nn.init.uniform_(w1, -math.sqrt(lim), math.sqrt(lim))
         nn.init.uniform_(w2, -math.sqrt(lim), math.sqrt(lim))
         self.w1 = nn.Parameter(w1)

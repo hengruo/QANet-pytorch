@@ -208,8 +208,7 @@ def train_entry(config):
 
     model = QANet(word_mat, char_mat).to(device)
     parameters = filter(lambda param: param.requires_grad, model.parameters())
-    optimizer = optim.Adam(lr=base_lr, betas=(0.9, 0.999), eps=1e-7, weight_decay=3e-7, params=parameters)
-    # optimizer = optim.SparseAdam(lr=lr, betas=(0.8, 0.999), eps=1e-7, params=parameters)
+    optimizer = optim.Adam(lr=base_lr, betas=(config.beta1, config.beta2), eps=1e-7, weight_decay=3e-7, params=parameters)
     cr = lr / math.log2(lr_warm_up_num)
     scheduler = optim.lr_scheduler.LambdaLR(
         optimizer,
@@ -225,7 +224,7 @@ def train_entry(config):
         metrics = test(model, dev_dataset, dev_eval_file)
         if iter + L >= lr_warm_up_num - 1 and unused:
             optimizer.param_groups[0]['initial_lr'] = lr
-            scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.9999)
+            scheduler = optim.lr_scheduler.ExponentialLR(optimizer, config.decay)
             unused = False
         print("Learning rate: {}".format(scheduler.get_lr()))
         dev_f1 = metrics["f1"]
