@@ -151,11 +151,11 @@ def train(model, optimizer, scheduler, dataset, start, length):
         loss.backward()
         optimizer.step()
         scheduler.step()
+        torch.nn.utils.clip_grad_norm(model.parameters(), config.grad_clip)
     loss_avg = np.mean(losses)
     print("STEP {:8d} loss {:8f}\n".format(i + 1, loss_avg))
 
-
-def test(model, dataset, eval_file):
+def valid(model, dataset, eval_file):
     model.eval()
     answer_dict = {}
     losses = []
@@ -179,11 +179,38 @@ def test(model, dataset, eval_file):
             answer_dict.update(answer_dict_)
     loss = np.mean(losses)
     metrics = evaluate(eval_file, answer_dict)
+    metrics["loss"] = loss
+    print("VALID loss {:8f} F1 {:8f} EM {:8f}\n".format(loss, metrics["f1"], metrics["exact_match"]))
+
+def test(model, dataset, eval_file):
+    model.eval()
+    answer_dict = {}
+    losses = []
+    num_batches = config.test_num_batches
+    with torch.no_grad():
+        for i in tqdm(range(num_batches), total=num_batches):
+            Cwid, Ccid, Qwid, Qcid, y1, y2, ids = dataset[i]
+            Cwid, Ccid, Qwid, Qcid = Cwid.to(device), Ccid.to(device), Qwid.to(device), Qcid.to(device)
+            p1, p2 = model(Cwid, Ccid, Qwid, Qcid)
+            y1, y2 = y1.to(device), y2.to(device)
+            loss1 = F.nll_loss(p1, y1, size_average=True)
+            loss2 = F.nll_loss(p2, y2, size_average=True)
+            loss = (loss1 + loss2) / 2
+            losses.append(loss.item())
+            yp1 = torch.argmax(p1, 1)
+            yp2 = torch.argmax(p2, 1)
+            yps = torch.stack([yp1, yp2], dim=1)
+            ymin, _ = torch.min(yps, 1)
+            ymax, _ = torch.max(yps, 1)
+            answer_dict_, _ = convert_tokens(eval_file, ids.tolist(), ymin.tolist(), ymax.tolist())
+            answer_dict.update(answer_dict_)
+    loss = np.mean(losses)
+    metrics = evaluate(eval_file, answer_dict)
     f = open("log/answers.json", "w")
     json.dump(answer_dict, f)
     f.close()
     metrics["loss"] = loss
-    print("EVAL loss {:8f} F1 {:8f} EM {:8f}\n".format(loss, metrics["f1"], metrics["exact_match"]))
+    print("TEST loss {:8f} F1 {:8f} EM {:8f}\n".format(loss, metrics["f1"], metrics["exact_match"]))
     return metrics
 
 
@@ -194,13 +221,15 @@ def train_entry(config):
         word_mat = np.array(json.load(fh), dtype=np.float32)
     with open(config.char_emb_file, "r") as fh:
         char_mat = np.array(json.load(fh), dtype=np.float32)
+    with open(config.train_eval_file, "r") as fh:
+        train_eval_file = json.load(fh)
     with open(config.dev_eval_file, "r") as fh:
         dev_eval_file = json.load(fh)
 
     print("Building model...")
 
     train_dataset = SQuADDataset(config.train_record_file, config.num_steps, config.batch_size)
-    dev_dataset = SQuADDataset(config.dev_record_file, config.val_num_batches, config.batch_size)
+    dev_dataset = SQuADDataset(config.dev_record_file, config.test_num_batches, config.batch_size)
 
     lr = config.learning_rate
     base_lr = 1.0
@@ -221,6 +250,7 @@ def train_entry(config):
     unused = True
     for iter in range(0, N, L):
         train(model, optimizer, scheduler, train_dataset, iter, L)
+        valid(model, train_dataset, train_eval_file)
         metrics = test(model, dev_dataset, dev_eval_file)
         if iter + L >= lr_warm_up_num - 1 and unused:
             optimizer.param_groups[0]['initial_lr'] = lr
@@ -259,6 +289,7 @@ def main(_):
     elif config.mode == "debug":
         config.batch_size = 2
         config.num_steps = 32
+        config.test_num_batches = 2
         config.val_num_batches = 2
         config.checkpoint = 2
         config.period = 1
