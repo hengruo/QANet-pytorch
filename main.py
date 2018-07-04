@@ -60,6 +60,20 @@ class SQuADDataset(Dataset):
                self.y2s[idxs], self.ids[idxs])
         return res
 
+class EMA(object):
+    def __init__(self, decay):
+        super().__init__()
+        self.decay = decay
+        self.shadows = {}
+
+    def register(self, name, data):
+        self.shadows[name] = data.clone()
+
+    def apply(self, name, data):
+        if name in self.shadows:
+            new_shadow = self.decay * data + (1.0 - self.decay) * self.shadows[name]
+            self.shadows[name] = new_shadow.clone()
+            return new_shadow
 
 def convert_tokens(eval_file, qa_id, pp1, pp2):
     answer_dict = {}
@@ -135,7 +149,7 @@ def metric_max_over_ground_truths(metric_fn, prediction, ground_truths):
     return max(scores_for_ground_truths)
 
 
-def train(model, optimizer, scheduler, dataset, start, length):
+def train(model, optimizer, scheduler, ema, dataset, start, length):
     model.train()
     losses = []
     for i in tqdm(range(start, length + start), total=length):
@@ -151,6 +165,8 @@ def train(model, optimizer, scheduler, dataset, start, length):
         loss.backward()
         optimizer.step()
         scheduler.step()
+        for name, p in model.named_parameters():
+            if p.requires_grad: ema.apply(name, p.data)
         torch.nn.utils.clip_grad_norm(model.parameters(), config.grad_clip)
     loss_avg = np.mean(losses)
     print("STEP {:8d} loss {:8f}\n".format(i + 1, loss_avg))
@@ -236,6 +252,10 @@ def train_entry(config):
     lr_warm_up_num = config.lr_warm_up_num
 
     model = QANet(word_mat, char_mat).to(device)
+    ema = EMA(0.999)
+    for name, p in model.named_parameters():
+        if p.requires_grad:
+            ema.register(name, p)
     parameters = filter(lambda param: param.requires_grad, model.parameters())
     optimizer = optim.Adam(lr=base_lr, betas=(config.beta1, config.beta2), eps=1e-7, weight_decay=3e-7, params=parameters)
     cr = lr / math.log2(lr_warm_up_num)
@@ -247,15 +267,10 @@ def train_entry(config):
     best_f1 = 0
     best_em = 0
     patience = 0
-    unused = True
     for iter in range(0, N, L):
-        train(model, optimizer, scheduler, train_dataset, iter, L)
+        train(model, optimizer, scheduler, ema, train_dataset, iter, L)
         valid(model, train_dataset, train_eval_file)
         metrics = test(model, dev_dataset, dev_eval_file)
-        if iter + L >= lr_warm_up_num - 1 and unused:
-            optimizer.param_groups[0]['initial_lr'] = lr
-            scheduler = optim.lr_scheduler.ExponentialLR(optimizer, config.decay)
-            unused = False
         print("Learning rate: {}".format(scheduler.get_lr()))
         dev_f1 = metrics["f1"]
         dev_em = metrics["exact_match"]
