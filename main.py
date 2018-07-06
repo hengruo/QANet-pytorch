@@ -151,7 +151,7 @@ def train(model, optimizer, scheduler, dataset, start, length):
         loss.backward()
         optimizer.step()
         scheduler.step()
-        torch.nn.utils.clip_grad_norm(model.parameters(), config.grad_clip)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_clip)
     loss_avg = np.mean(losses)
     print("STEP {:8d} loss {:8f}\n".format(i + 1, loss_avg))
 
