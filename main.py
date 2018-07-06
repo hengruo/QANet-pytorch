@@ -61,6 +61,23 @@ class SQuADDataset(Dataset):
                self.y2s[idxs], self.ids[idxs])
         return res
 
+class EMA(object):
+    def __init__(self, decay):
+        self.decay = decay
+        self.shadows = {}
+
+    def __len__(self):
+        return len(self.shadows)
+
+    def __getitem__(self, name):
+        return self.shadows[name].to(device)
+
+    def __setitem__(self, name, data):
+        if name in self.shadows:
+            new_shadow = self.decay * data + (1.0 - self.decay) * self.shadows[name].to(device)
+            self.shadows[name] = new_shadow.to('cpu').clone()
+        else:
+            self.shadows[name] = data.to('cpu').clone()
 
 def convert_tokens(eval_file, qa_id, pp1, pp2):
     answer_dict = {}
@@ -136,7 +153,7 @@ def metric_max_over_ground_truths(metric_fn, prediction, ground_truths):
     return max(scores_for_ground_truths)
 
 
-def train(model, optimizer, scheduler, dataset, start, length):
+def train(model, optimizer, scheduler, ema, dataset, start, length):
     model.train()
     losses = []
     for i in tqdm(range(start, length + start), total=length):
@@ -152,6 +169,10 @@ def train(model, optimizer, scheduler, dataset, start, length):
         loss.backward()
         optimizer.step()
         scheduler.step()
+        for name, p in model.named_parameters():
+            if p.requires_grad: 
+                ema[name] = p.data
+                p.data.copy_(ema[name])
         torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_clip)
     loss_avg = np.mean(losses)
     print("STEP {:8d} loss {:8f}\n".format(i + 1, loss_avg))
@@ -237,6 +258,10 @@ def train_entry(config):
     lr_warm_up_num = config.lr_warm_up_num
 
     model = QANet(word_mat, char_mat).to(device)
+    ema = EMA(config.ema_decay)
+    for name, p in model.named_parameters():
+        if p.requires_grad:
+            ema[name] = p.data
     parameters = filter(lambda param: param.requires_grad, model.parameters())
     optimizer = optim.Adam(lr=base_lr, betas=(config.beta1, config.beta2), eps=1e-7, weight_decay=3e-7, params=parameters)
     cr = lr / math.log2(lr_warm_up_num)
@@ -249,7 +274,7 @@ def train_entry(config):
     best_em = 0
     patience = 0
     for iter in range(0, N, L):
-        train(model, optimizer, scheduler, train_dataset, iter, L)
+        train(model, optimizer, scheduler, ema, train_dataset, iter, L)
         valid(model, train_dataset, train_eval_file)
         metrics = test(model, dev_dataset, dev_eval_file)
         print("Learning rate: {}".format(scheduler.get_lr()))
