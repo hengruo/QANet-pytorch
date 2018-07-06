@@ -165,8 +165,8 @@ def train(model, optimizer, scheduler, ema, dataset, start, length):
         loss.backward()
         optimizer.step()
         scheduler.step()
-       for name, p in model.named_parameters():
-           if p.requires_grad: ema.apply(name, p.data)
+        for name, p in model.named_parameters():
+            if p.requires_grad: ema.apply(name, p.data)
         torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_clip)
     loss_avg = np.mean(losses)
     print("STEP {:8d} loss {:8f}\n".format(i + 1, loss_avg))
@@ -253,9 +253,9 @@ def train_entry(config):
 
     model = QANet(word_mat, char_mat).to(device)
     ema = EMA(config.ema_decay)
-   for name, p in model.named_parameters():
-       if p.requires_grad:
-           ema.register(name, p.data)
+    for name, p in model.named_parameters():
+        if p.requires_grad:
+            ema.register(name, p.data)
     parameters = filter(lambda param: param.requires_grad, model.parameters())
     optimizer = optim.Adam(lr=base_lr, betas=(config.beta1, config.beta2), eps=1e-7, weight_decay=3e-7, params=parameters)
     cr = lr / math.log2(lr_warm_up_num)
