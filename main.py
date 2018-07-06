@@ -67,12 +67,12 @@ class EMA(object):
         self.shadows = {}
 
     def register(self, name, data):
-        self.shadows[name] = data.clone()
+        self.shadows[name] = data.to('cpu').clone()
 
     def apply(self, name, data):
         if name in self.shadows:
-            new_shadow = self.decay * data + (1.0 - self.decay) * self.shadows[name]
-            self.shadows[name] = new_shadow.clone()
+            new_shadow = self.decay * data + (1.0 - self.decay) * self.shadows[name].to(device)
+            self.shadows[name] = new_shadow.to('cpu').clone()
             return new_shadow
 
 def convert_tokens(eval_file, qa_id, pp1, pp2):
