@@ -23,6 +23,7 @@ Some functions are from the official evaluation script.
 
 class SQuADDataset(Dataset):
     def __init__(self, npz_file, num_steps, batch_size):
+        super().__init__()
         data = np.load(npz_file)
         self.context_idxs = torch.from_numpy(data["context_idxs"]).long()
         self.context_char_idxs = torch.from_numpy(data["context_char_idxs"]).long()
@@ -62,7 +63,6 @@ class SQuADDataset(Dataset):
 
 class EMA(object):
     def __init__(self, decay):
-        super().__init__()
         self.decay = decay
         self.shadows = {}
 
@@ -167,7 +167,7 @@ def train(model, optimizer, scheduler, ema, dataset, start, length):
         scheduler.step()
         for name, p in model.named_parameters():
             if p.requires_grad: ema.apply(name, p.data)
-        torch.nn.utils.clip_grad_norm(model.parameters(), config.grad_clip)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_clip)
     loss_avg = np.mean(losses)
     print("STEP {:8d} loss {:8f}\n".format(i + 1, loss_avg))
 
