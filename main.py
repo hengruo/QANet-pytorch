@@ -247,15 +247,10 @@ def train_entry(config):
     best_f1 = 0
     best_em = 0
     patience = 0
-    unused = True
     for iter in range(0, N, L):
         train(model, optimizer, scheduler, train_dataset, iter, L)
         valid(model, train_dataset, train_eval_file)
         metrics = test(model, dev_dataset, dev_eval_file)
-        if iter + L >= lr_warm_up_num - 1 and unused:
-            optimizer.param_groups[0]['initial_lr'] = lr
-            scheduler = optim.lr_scheduler.ExponentialLR(optimizer, config.decay)
-            unused = False
         print("Learning rate: {}".format(scheduler.get_lr()))
         dev_f1 = metrics["f1"]
         dev_em = metrics["exact_match"]
