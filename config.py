@@ -101,7 +101,7 @@ flags.DEFINE_float("beta2", 0.999, "Beta 2")
 # flags.DEFINE_float("l2_norm", 3e-7, "L2 norm scale")
 flags.DEFINE_integer("early_stop", 10, "Checkpoints for early stop")
 flags.DEFINE_integer("connector_dim", 96, "Dimension of connectors of each layer")
-flags.DEFINE_integer("num_heads", 8, "Number of heads in multi-head attention")
+flags.DEFINE_integer("num_heads", 2, "Number of heads in multi-head attention")
 
 # Extensions (Uncomment corresponding line in download.sh to download the required data)
 glove_char_file = os.path.join(home, "data", "glove", "glove.840B.300d-char.txt")

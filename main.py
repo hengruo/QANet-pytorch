@@ -1,7 +1,7 @@
 from config import config, device
 from preproc import preproc
 from absl import app
-import math
+from math import log2
 import os
 import numpy as np
 import ujson as json
@@ -11,6 +11,7 @@ import string
 from tqdm import tqdm
 import random
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.cuda
@@ -61,23 +62,30 @@ class SQuADDataset(Dataset):
                self.y2s[idxs], self.ids[idxs])
         return res
 
+
 class EMA(object):
     def __init__(self, decay):
         self.decay = decay
         self.shadows = {}
+        self.devices = {}
 
     def __len__(self):
         return len(self.shadows)
 
-    def __getitem__(self, name):
-        return self.shadows[name].to(device)
+    def get(self, name: str):
+        return self.shadows[name].to(self.devices[name])
 
-    def __setitem__(self, name, data):
+    def set(self, name: str, param: nn.Parameter):
+        self.shadows[name] = param.data.to('cpu').clone()
+        self.devices[name] = param.data.device
+
+    def update_parameter(self, name: str, param: nn.Parameter):
         if name in self.shadows:
-            new_shadow = self.decay * data + (1.0 - self.decay) * self.shadows[name].to(device)
+            data = param.data
+            new_shadow = self.decay * data + (1.0 - self.decay) * self.get(name)
+            param.data.copy_(new_shadow)
             self.shadows[name] = new_shadow.to('cpu').clone()
-        else:
-            self.shadows[name] = data.to('cpu').clone()
+
 
 def convert_tokens(eval_file, qa_id, pp1, pp2):
     answer_dict = {}
@@ -170,12 +178,11 @@ def train(model, optimizer, scheduler, ema, dataset, start, length):
         optimizer.step()
         scheduler.step()
         for name, p in model.named_parameters():
-            if p.requires_grad: 
-                ema[name] = p.data
-                p.data.copy_(ema[name])
+            if p.requires_grad: ema.update_parameter(name, p)
         torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_clip)
     loss_avg = np.mean(losses)
     print("STEP {:8d} loss {:8f}\n".format(i + 1, loss_avg))
+
 
 def valid(model, dataset, eval_file):
     model.eval()
@@ -203,6 +210,7 @@ def valid(model, dataset, eval_file):
     metrics = evaluate(eval_file, answer_dict)
     metrics["loss"] = loss
     print("VALID loss {:8f} F1 {:8f} EM {:8f}\n".format(loss, metrics["f1"], metrics["exact_match"]))
+
 
 def test(model, dataset, eval_file):
     model.eval()
@@ -255,24 +263,19 @@ def train_entry(config):
 
     lr = config.learning_rate
     base_lr = 1.0
-    lr_warm_up_num = config.lr_warm_up_num
+    warm_up = config.lr_warm_up_num
 
     model = QANet(word_mat, char_mat).to(device)
     ema = EMA(config.ema_decay)
     for name, p in model.named_parameters():
-        if p.requires_grad:
-            ema[name] = p.data
-    parameters = filter(lambda param: param.requires_grad, model.parameters())
-    optimizer = optim.Adam(lr=base_lr, betas=(config.beta1, config.beta2), eps=1e-7, weight_decay=3e-7, params=parameters)
-    cr = lr / math.log2(lr_warm_up_num)
-    scheduler = optim.lr_scheduler.LambdaLR(
-        optimizer,
-        lr_lambda=lambda ee: cr * math.log2(ee + 1) if ee < lr_warm_up_num else lr)
+        if p.requires_grad: ema.set(name, p)
+    params = filter(lambda param: param.requires_grad, model.parameters())
+    optimizer = optim.Adam(lr=base_lr, betas=(config.beta1, config.beta2), eps=1e-7, weight_decay=3e-7, params=params)
+    cr = lr / log2(warm_up)
+    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda ee: cr * log2(ee + 1) if ee < warm_up else lr)
     L = config.checkpoint
     N = config.num_steps
-    best_f1 = 0
-    best_em = 0
-    patience = 0
+    best_f1 = best_em = patience = 0
     for iter in range(0, N, L):
         train(model, optimizer, scheduler, ema, train_dataset, iter, L)
         valid(model, train_dataset, train_eval_file)
@@ -282,8 +285,7 @@ def train_entry(config):
         dev_em = metrics["exact_match"]
         if dev_f1 < best_f1 and dev_em < best_em:
             patience += 1
-            if patience > config.early_stop:
-                break
+            if patience > config.early_stop: break
         else:
             patience = 0
             best_f1 = max(best_f1, dev_f1)
