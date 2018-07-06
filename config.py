@@ -84,7 +84,6 @@ flags.DEFINE_integer("num_threads", 4, "Number of threads in input pipeline")
 flags.DEFINE_boolean("is_bucket", False, "build bucket batch iterator or not")
 flags.DEFINE_list("bucket_range", [40, 401, 40], "the range of bucket")
 
-flags.DEFINE_boolean("use_cuda", True, "Whether to use CUDA")
 flags.DEFINE_integer("batch_size", 16, "Batch size")
 flags.DEFINE_integer("num_steps", 60000, "Number of steps")
 flags.DEFINE_integer("checkpoint", 1000, "checkpoint to save and evaluate the model")
@@ -115,6 +114,6 @@ flags.DEFINE_boolean("fasttext", False, "Whether to use fasttext")
 
 config = flags.FLAGS
 
-device = torch.device("cuda" if torch.cuda.is_available() and config.use_cuda else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 cudnn.enabled = False
