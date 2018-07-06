@@ -23,6 +23,7 @@ Some functions are from the official evaluation script.
 
 class SQuADDataset(Dataset):
     def __init__(self, npz_file, num_steps, batch_size):
+        super().__init__()
         data = np.load(npz_file)
         self.context_idxs = torch.from_numpy(data["context_idxs"]).long()
         self.context_char_idxs = torch.from_numpy(data["context_char_idxs"]).long()
