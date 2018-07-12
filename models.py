@@ -192,6 +192,7 @@ class CQAttention(nn.Module):
         Qt = Q.unsqueeze(1).expand(shape)
         CQ = torch.mul(Ct, Qt)
         S = torch.cat([Ct, Qt, CQ], dim=3)
+        S = torch.matmul(S, self.w)
         S1 = F.softmax(mask_logits(S, qmask), dim=2)
         S2 = F.softmax(mask_logits(S, cmask), dim=1)
         A = torch.bmm(S1, Q)
