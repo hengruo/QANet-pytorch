@@ -6,6 +6,13 @@ An implementation of [QANet](https://arxiv.org/pdf/1804.09541.pdf) with PyTorch,
 
 Any contributions are welcome!
 
+## Current performance
+
+| F1 | EM | Got by |
+|----|----|--------|
+| 66 | ?  | [InitialBug](https://github.com/InitialBug)|
+| 64 | 50 | [BangLiu](https://github.com/BangLiu)|
+
 ## Usage
 
 1. Install pytorch 0.4 for Python 3.6+
@@ -24,7 +31,9 @@ models.py: QANet structure.
 
 config.py: configurations.
 
-## Differences from the paper
+## NOTICE
+
+### Differences from the paper
 
 1. The paper doesn't mention which activation function they used. I use relu.
 2. I don't set the embedding of `<UNK>` trainable.
@@ -33,11 +42,12 @@ config.py: configurations.
 ## TODO
 
 - [x] Reduce memory usage
-- [ ] Performance analysis
+- [ ] Improve converging speed (to reach 60 F1 scores in 1000 iterations)
 - [ ] Reach state-of-art scroes of the original paper
+- [ ] Performance analysis
 - [ ] Test on SQuAD 2.0
-- [ ] Ablation analysis
 
 ## Contributors
 1. [InitialBug](https://github.com/InitialBug): found two bugs: (1). positional encodings require gradients; (2). wrong weight sharing among encoders.
 2. [linthieda](https://github.com/linthieda): fixed one issue about dependencies and offered computing resources.
+3. [BangLiu](https://github.com/BangLiu): tested the model.
