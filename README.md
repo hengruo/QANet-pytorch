@@ -31,9 +31,7 @@ models.py: QANet structure.
 
 config.py: configurations.
 
-## NOTICE
-
-### Differences from the paper
+## Differences from the paper
 
 1. The paper doesn't mention which activation function they used. I use relu.
 2. I don't set the embedding of `<UNK>` trainable.
