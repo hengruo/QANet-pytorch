@@ -2,7 +2,7 @@
 
 ## Introduction
 
-An implementation of [QANet](https://arxiv.org/pdf/1804.09541.pdf) with PyTorch, using SQuAD 1.1. 
+An implementation of [QANet](https://arxiv.org/pdf/1804.09541.pdf) with PyTorch. 
 
 Any contributions are welcome!
 
@@ -49,3 +49,4 @@ config.py: configurations.
 1. [InitialBug](https://github.com/InitialBug): found two bugs: (1). positional encodings require gradients; (2). wrong weight sharing among encoders.
 2. [linthieda](https://github.com/linthieda): fixed one issue about dependencies and offered computing resources.
 3. [BangLiu](https://github.com/BangLiu): tested the model.
+4. [wlhgtc](https://github.com/wlhgtc): improved the calculation of Context-Question Attention.
