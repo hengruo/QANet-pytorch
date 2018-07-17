@@ -56,7 +56,7 @@ class DepthwiseSeparableConv(nn.Module):
 
 
 class Highway(nn.Module):
-    def __init__(self, layer_num: int, size=D):
+    def __init__(self, layer_num: int, size=Dword+Dchar):
         super().__init__()
         self.n = layer_num
         self.linear = nn.ModuleList([nn.Linear(size, size) for _ in range(self.n)])
@@ -116,8 +116,7 @@ class SelfAttention(nn.Module):
 class Embedding(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv2d = DepthwiseSeparableConv(Dchar, D, 5, dim=2, bias=True)
-        self.conv1d = DepthwiseSeparableConv(Dword + D, D, 5, bias=True)
+        self.conv2d = DepthwiseSeparableConv(Dchar, Dchar, 5, dim=2, bias=True)
         self.high = Highway(2)
 
     def forward(self, ch_emb, wd_emb):
@@ -130,7 +129,6 @@ class Embedding(nn.Module):
         wd_emb = F.dropout(wd_emb, p=dropout, training=self.training)
         wd_emb = wd_emb.transpose(1, 2)
         emb = torch.cat([ch_emb, wd_emb], dim=1)
-        emb = self.conv1d(emb)
         emb = self.high(emb)
         return emb
 
@@ -138,6 +136,7 @@ class Embedding(nn.Module):
 class EncoderBlock(nn.Module):
     def __init__(self, conv_num: int, ch_num: int, k: int, length: int):
         super().__init__()
+        self.convw=DepthwiseSeparableConv(Dchar+Dword, D, 5, bias=True)
         self.convs = nn.ModuleList([DepthwiseSeparableConv(ch_num, ch_num, k) for _ in range(conv_num)])
         self.self_att = SelfAttention()
         self.fc = nn.Linear(ch_num, ch_num, bias=True)
@@ -148,6 +147,7 @@ class EncoderBlock(nn.Module):
         self.L = conv_num
 
     def forward(self, x, mask):
+        x=self.convw(x)
         out = self.pos(x)
         res = out
         out = self.normb(out)
