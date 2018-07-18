@@ -136,7 +136,6 @@ class Embedding(nn.Module):
 class EncoderBlock(nn.Module):
     def __init__(self, conv_num: int, ch_num: int, k: int, length: int):
         super().__init__()
-        self.convw=DepthwiseSeparableConv(Dchar+Dword, D, 5, bias=True)
         self.convs = nn.ModuleList([DepthwiseSeparableConv(ch_num, ch_num, k) for _ in range(conv_num)])
         self.self_att = SelfAttention()
         self.fc = nn.Linear(ch_num, ch_num, bias=True)
@@ -147,7 +146,6 @@ class EncoderBlock(nn.Module):
         self.L = conv_num
 
     def forward(self, x, mask):
-        x=self.convw(x)
         out = self.pos(x)
         res = out
         out = self.normb(out)
@@ -236,6 +234,8 @@ class QANet(nn.Module):
             self.char_emb = nn.Embedding.from_pretrained(char_mat, freeze=False)
         self.word_emb = nn.Embedding.from_pretrained(torch.Tensor(word_mat))
         self.emb = Embedding()
+        self.context_conv = DepthwiseSeparableConv(Dword+Dchar,D, 5)
+        self.question_conv = DepthwiseSeparableConv(Dword+Dchar,D, 5)
         self.c_emb_enc = EncoderBlock(conv_num=4, ch_num=D, k=7, length=Lc)
         self.q_emb_enc = EncoderBlock(conv_num=4, ch_num=D, k=7, length=Lq)
         self.cq_att = CQAttention()
@@ -250,8 +250,11 @@ class QANet(nn.Module):
         Cw, Cc = self.word_emb(Cwid), self.char_emb(Ccid)
         Qw, Qc = self.word_emb(Qwid), self.char_emb(Qcid)
         C, Q = self.emb(Cc, Cw), self.emb(Qc, Qw)
+        C = self.context_conv(C)  
+        Q = self.question_conv(Q)  
         Ce = self.c_emb_enc(C, cmask)
         Qe = self.q_emb_enc(Q, qmask)
+        
         X = self.cq_att(Ce, Qe, cmask, qmask)
         M1 = self.cq_resizer(X)
         for enc in self.model_enc_blks: M1 = enc(M1, cmask)
