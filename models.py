@@ -226,7 +226,7 @@ class Pointer(nn.Module):
 class QANet(nn.Module):
     def __init__(self, word_mat, char_mat):
         super().__init__()
-        self.char_emb = nn.Embedding.from_pretrained(char_mat, freeze=config.pretrained_char)
+        self.char_emb = nn.Embedding.from_pretrained(torch.Tensor(char_mat), freeze=config.pretrained_char)
         self.word_emb = nn.Embedding.from_pretrained(torch.Tensor(word_mat))
         self.emb = Embedding()
         self.context_conv = DepthwiseSeparableConv(Dword+Dchar,D, 5)
