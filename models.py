@@ -56,7 +56,7 @@ class DepthwiseSeparableConv(nn.Module):
 
 
 class Highway(nn.Module):
-    def __init__(self, layer_num: int, size=Dword+Dchar):
+    def __init__(self, layer_num: int, size: int):
         super().__init__()
         self.n = layer_num
         self.linear = nn.ModuleList([nn.Linear(size, size) for _ in range(self.n)])
@@ -117,7 +117,7 @@ class Embedding(nn.Module):
     def __init__(self):
         super().__init__()
         self.conv2d = DepthwiseSeparableConv(Dchar, Dchar, 5, dim=2, bias=True)
-        self.high = Highway(2)
+        self.high = Highway(2, Dword+Dchar)
 
     def forward(self, ch_emb, wd_emb):
         ch_emb = ch_emb.permute(0, 3, 1, 2)
@@ -226,12 +226,7 @@ class Pointer(nn.Module):
 class QANet(nn.Module):
     def __init__(self, word_mat, char_mat):
         super().__init__()
-        if config.pretrained_char:
-            self.char_emb = nn.Embedding.from_pretrained(torch.Tensor(char_mat))
-        else:
-            char_mat = torch.Tensor(char_mat)
-            # nn.init.kaiming_uniform_(char_mat)
-            self.char_emb = nn.Embedding.from_pretrained(char_mat, freeze=False)
+        self.char_emb = nn.Embedding.from_pretrained(char_mat, freeze=config.pretrained_char)
         self.word_emb = nn.Embedding.from_pretrained(torch.Tensor(word_mat))
         self.emb = Embedding()
         self.context_conv = DepthwiseSeparableConv(Dword+Dchar,D, 5)
