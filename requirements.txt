@@ -1,0 +1,8 @@
+cython >= 0.28.3
+spacy >= 2.0.11
+bleach == 1.5.0
+html5lib == 0.9999999
+msgpack-numpy
+tqdm >= 4.23.4
+ujson >= 1.35
+tensorboard
