@@ -305,8 +305,8 @@ def preproc():
     # save(config.test_eval_file, test_eval, message="test eval")
     save(config.word2idx_file, word2idx_dict, message="word dictionary")
     save(config.char2idx_file, char2idx_dict, message="char dictionary")
-    save(config.dev_meta, dev_meta, message="dev meta")
-    # save(config.test_meta, test_meta, message="test meta")
+    save(config.dev_meta_file, dev_meta, message="dev meta")
+    # save(config.test_meta_file, test_meta, message="test meta")
 
 if __name__ == "__main__":
     preproc()
