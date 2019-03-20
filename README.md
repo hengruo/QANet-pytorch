@@ -22,7 +22,7 @@ Any contributions are welcome!
 1. Install pytorch 0.4 for Python 3.6+
 2. Run `pip install -r requirements.txt` to install python dependencies.
 3. Run `download.sh` to download the dataset.
-4. Run `python main.py --mode data` to build tensors from the raw dataset.
+4. Run `python preproc.py` to build tensors from the raw dataset.
 5. Run `python main.py --mode train` to train the model. After training, `log/model.pt` will be generated.
 6. Run `python main.py --mode test` to test an pretrained model. Default model file is `log/model.pt`
 
